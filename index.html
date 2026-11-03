@@ -1,0 +1,2516 @@
+```html
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Absensi Digital Kegiatan Terapi - Pondok Pemulihan Sahabat Yogyakarta</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- html2pdf.js untuk Download PDF -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <!-- Firebase SDKs (Modular v11) -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager, collection, doc, setDoc, deleteDoc, onSnapshot, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Expose Firebase tools globally for script compatibility
+        window.firebaseModular = {
+            initializeApp, getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged,
+            getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager,
+            collection, doc, setDoc, deleteDoc, onSnapshot, getDocs
+        };
+        window.dispatchEvent(new Event('firebase-loaded'));
+    </script>
+    <style>
+        @media print {
+            .no-print { display: none !important; }
+            .print-only { display: block !important; }
+            body { background: white !important; color: black !important; padding: 0 !important; margin: 0 !important; }
+            main { border: none !important; box-shadow: none !important; padding: 0 !important; }
+            .print-area { padding: 0 !important; margin: 0 !important; box-shadow: none !important; border: none !important; width: 100% !important; }
+            @page { size: A4 portrait; margin: 1.5cm; }
+            .page-break-inside-avoid { page-break-inside: avoid; }
+            /* Memaksa warna background tetap muncul saat di-print / PDF */
+            * {
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
+        }
+        .print-only { display: none; }
+    </style>
+</head>
+<body class="bg-slate-100 text-slate-800 font-sans min-h-screen flex flex-col">
+
+    <!-- TOAST NOTIFICATION -->
+    <div id="toast" class="fixed top-4 right-4 z-50 hidden px-4 py-3 rounded-xl shadow-xl text-white font-medium text-sm flex items-center gap-2 transition-all duration-300">
+        <span id="toast-message">Notifikasi</span>
+    </div>
+
+    <!-- MODAL CONFIRMATION DIALOG -->
+    <div id="modal-confirm" class="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl p-6 max-w-sm w-full space-y-4 shadow-xl border border-slate-200">
+            <div class="flex items-center gap-3 text-amber-600">
+                <div class="p-2.5 bg-amber-100 rounded-xl"><i data-lucide="alert-triangle" class="w-6 h-6"></i></div>
+                <h3 id="confirm-modal-title" class="text-base font-bold text-slate-800">Konfirmasi Action</h3>
+            </div>
+            <p id="confirm-modal-message" class="text-xs text-slate-600">Apakah Anda yakin ingin melakukan tindakan ini?</p>
+            <div class="flex justify-end gap-2 pt-2">
+                <button type="button" onclick="closeConfirmModal()" class="px-4 py-2 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-xl text-xs font-semibold">Batal</button>
+                <button type="button" id="confirm-modal-btn" class="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-semibold">Ya, Lanjutkan</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- HEADER UTAMA -->
+    <header class="bg-slate-900 text-white shadow-md no-print sticky top-0 z-40">
+        <div class="max-w-7xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-4">
+            <div class="flex items-center gap-3">
+                <div class="bg-blue-600 text-white p-2.5 rounded-xl font-bold shadow-md">
+                    <i data-lucide="activity" class="w-6 h-6"></i>
+                </div>
+                <div>
+                    <h1 id="header-nama-lembaga" class="text-base sm:text-lg font-bold tracking-wide text-blue-100">PONDOK PEMULIHAN SAHABAT YOGYAKARTA</h1>
+                    <p class="text-xs text-slate-400">Sistem Absensi Digital & Rekapitulasi Keaktifan Kegiatan Terapi</p>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-3">
+                <div class="bg-slate-800 p-1 rounded-lg border border-slate-700 flex items-center text-xs">
+                    <button id="btn-role-admin" onclick="switchRole('ADMIN')" class="px-3 py-1.5 rounded-md font-medium bg-blue-600 text-white transition">Admin</button>
+                    <button id="btn-role-fasilitator" onclick="switchRole('FASILITATOR')" class="px-3 py-1.5 rounded-md font-medium text-slate-400 hover:text-white transition">Fasilitator</button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- MAIN CONTAINER -->
+    <div class="flex-1 max-w-7xl w-full mx-auto flex flex-col md:flex-row gap-6 p-4 md:p-6">
+        
+        <!-- SIDEBAR NAVIGASI -->
+        <nav class="w-full md:w-64 bg-white rounded-2xl shadow-sm border border-slate-200 p-3 shrink-0 flex flex-col justify-between no-print">
+            <div class="space-y-1">
+                <div class="px-3 py-2 text-[11px] font-bold text-slate-400 uppercase tracking-wider">Menu Utama</div>
+
+                <button onclick="navigateTo('DASHBOARD')" id="nav-DASHBOARD" class="nav-btn w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold bg-blue-600 text-white">
+                    <div class="flex items-center gap-2.5"><i data-lucide="home" class="w-4 h-4"></i><span>Dashboard</span></div>
+                </button>
+
+                <button onclick="navigateTo('ABSEN_PESERTA')" id="nav-ABSEN_PESERTA" class="nav-btn w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100">
+                    <div class="flex items-center gap-2.5"><i data-lucide="user-check" class="w-4 h-4"></i><span>Absen Peserta</span></div>
+                </button>
+
+                <button onclick="navigateTo('ABSEN_FASILITATOR')" id="nav-ABSEN_FASILITATOR" class="nav-btn w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100">
+                    <div class="flex items-center gap-2.5"><i data-lucide="clock" class="w-4 h-4"></i><span>Absen Fasilitator</span></div>
+                </button>
+
+                <div class="admin-only pt-3 px-3 py-2 text-[11px] font-bold text-slate-400 uppercase tracking-wider">Database Master</div>
+                
+                <button onclick="navigateTo('DATA_PESERTA')" id="nav-DATA_PESERTA" class="admin-only nav-btn w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100">
+                    <div class="flex items-center gap-2.5"><i data-lucide="users" class="w-4 h-4"></i><span>Data Peserta</span></div>
+                    <span id="badge-peserta" class="px-2 py-0.5 rounded-full text-[10px] bg-slate-200 text-slate-700">0</span>
+                </button>
+
+                <button onclick="navigateTo('DATA_FASILITATOR')" id="nav-DATA_FASILITATOR" class="admin-only nav-btn w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100">
+                    <div class="flex items-center gap-2.5"><i data-lucide="user-cog" class="w-4 h-4"></i><span>Data Fasilitator</span></div>
+                    <span id="badge-fasilitator" class="px-2 py-0.5 rounded-full text-[10px] bg-slate-200 text-slate-700">0</span>
+                </button>
+
+                <button onclick="navigateTo('DATA_TERAPI')" id="nav-DATA_TERAPI" class="admin-only nav-btn w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100">
+                    <div class="flex items-center gap-2.5"><i data-lucide="activity" class="w-4 h-4"></i><span>Data Jenis Terapi</span></div>
+                </button>
+
+                <button onclick="navigateTo('DATA_MATERI')" id="nav-DATA_MATERI" class="admin-only nav-btn w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100">
+                    <div class="flex items-center gap-2.5"><i data-lucide="book-open" class="w-4 h-4"></i><span>Data Materi</span></div>
+                </button>
+
+                <div class="pt-3 px-3 py-2 text-[11px] font-bold text-slate-400 uppercase tracking-wider">Laporan & Rekap</div>
+
+                <button onclick="navigateTo('REKAP_HARIAN')" id="nav-REKAP_HARIAN" class="nav-btn w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100">
+                    <div class="flex items-center gap-2.5"><i data-lucide="calendar" class="w-4 h-4"></i><span>Rekap Harian Peserta</span></div>
+                </button>
+
+                <button onclick="navigateTo('REKAP_KEGIATAN')" id="nav-REKAP_KEGIATAN" class="nav-btn w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100">
+                    <div class="flex items-center gap-2.5"><i data-lucide="clipboard-list" class="w-4 h-4"></i><span>Rekap per Kegiatan</span></div>
+                </button>
+
+                <button onclick="navigateTo('REKAP_MINGGUAN')" id="nav-REKAP_MINGGUAN" class="nav-btn w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100">
+                    <div class="flex items-center gap-2.5"><i data-lucide="bar-chart-3" class="w-4 h-4"></i><span>Rekap Mingguan Peserta</span></div>
+                </button>
+
+                <button onclick="navigateTo('REKAP_BULANAN')" id="nav-REKAP_BULANAN" class="nav-btn w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100">
+                    <div class="flex items-center gap-2.5"><i data-lucide="line-chart" class="w-4 h-4"></i><span>Rekap Bulanan Peserta</span></div>
+                </button>
+
+                <button onclick="navigateTo('REKAP_FASILITATOR')" id="nav-REKAP_FASILITATOR" class="nav-btn w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100">
+                    <div class="flex items-center gap-2.5"><i data-lucide="briefcase" class="w-4 h-4"></i><span>Rekap Fasilitator</span></div>
+                </button>
+
+                <button onclick="navigateTo('PENGATURAN')" id="nav-PENGATURAN" class="admin-only nav-btn w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100">
+                    <div class="flex items-center gap-2.5"><i data-lucide="settings" class="w-4 h-4"></i><span>Pengaturan</span></div>
+                </button>
+            </div>
+
+            <div class="p-3 mt-6 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-500">
+                <p class="font-semibold text-slate-700">Pondok Pemulihan Sahabat</p>
+                <p id="cloud-status" class="text-[10px] text-amber-600 font-semibold mt-1">● Menghubungkan Cloud...</p>
+            </div>
+        </nav>
+
+        <!-- KONTEN AREA -->
+        <main class="flex-1 bg-white rounded-2xl shadow-sm border border-slate-200 p-4 md:p-6 overflow-hidden">
+            
+            <!-- SECTION 1: DASHBOARD -->
+            <section id="section-DASHBOARD" class="space-y-6">
+                <div class="bg-gradient-to-r from-blue-700 to-indigo-800 rounded-2xl p-6 text-white shadow-lg">
+                    <span class="bg-blue-500/30 text-blue-100 text-xs px-3 py-1 rounded-full font-medium border border-blue-400/30">Absensi Digital Pemulihan (Tersimpan Online & Offline)</span>
+                    <h2 id="dash-nama-lembaga" class="text-2xl font-bold mt-2">PONDOK PEMULIHAN SAHABAT YOGYAKARTA</h2>
+                    <p id="dash-alamat" class="text-blue-100 text-xs mt-1">Jl. Raya Jogja - Solo KM. 11, Kalasan, Sleman, Yogyakarta</p>
+                    <div class="flex flex-wrap gap-3 mt-5">
+                        <button onclick="navigateTo('ABSEN_PESERTA')" class="bg-white text-blue-700 hover:bg-blue-50 px-4 py-2 rounded-xl text-xs font-bold shadow flex items-center gap-2">
+                            <i data-lucide="user-check" class="w-4 h-4"></i> Absen Peserta Sekarang
+                        </button>
+                        <button onclick="navigateTo('REKAP_KEGIATAN')" class="bg-blue-600/60 hover:bg-blue-600 text-white px-4 py-2 rounded-xl text-xs font-bold border border-blue-400/40 flex items-center gap-2">
+                            <i data-lucide="clipboard-list" class="w-4 h-4"></i> Rekap per Kegiatan
+                        </button>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                    <div class="bg-slate-50 p-4 rounded-xl border border-slate-200 flex justify-between items-center">
+                        <div>
+                            <p class="text-xs text-slate-500 font-medium">Total Peserta</p>
+                            <p id="dash-total-peserta" class="text-2xl font-bold text-slate-800 mt-1">0</p>
+                        </div>
+                        <div class="p-3 bg-blue-100 text-blue-700 rounded-xl"><i data-lucide="users" class="w-5 h-5"></i></div>
+                    </div>
+                    <div class="bg-slate-50 p-4 rounded-xl border border-slate-200 flex justify-between items-center">
+                        <div>
+                            <p class="text-xs text-slate-500 font-medium">Total Fasilitator</p>
+                            <p id="dash-total-fasilitator" class="text-2xl font-bold text-slate-800 mt-1">0</p>
+                        </div>
+                        <div class="p-3 bg-indigo-100 text-indigo-700 rounded-xl"><i data-lucide="user-cog" class="w-5 h-5"></i></div>
+                    </div>
+                    <div class="bg-slate-50 p-4 rounded-xl border border-slate-200 flex justify-between items-center">
+                        <div>
+                            <p class="text-xs text-slate-500 font-medium">Jenis Terapi</p>
+                            <p id="dash-total-terapi" class="text-2xl font-bold text-slate-800 mt-1">0</p>
+                        </div>
+                        <div class="p-3 bg-emerald-100 text-emerald-700 rounded-xl"><i data-lucide="activity" class="w-5 h-5"></i></div>
+                    </div>
+                    <div class="bg-slate-50 p-4 rounded-xl border border-slate-200 flex justify-between items-center">
+                        <div>
+                            <p class="text-xs text-slate-500 font-medium">Materi Terapi</p>
+                            <p id="dash-total-materi" class="text-2xl font-bold text-slate-800 mt-1">0</p>
+                        </div>
+                        <div class="p-3 bg-amber-100 text-amber-700 rounded-xl"><i data-lucide="book-open" class="w-5 h-5"></i></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- SECTION 2: DATA PESERTA -->
+            <section id="section-DATA_PESERTA" class="space-y-4 hidden">
+                <div class="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-200">
+                    <div>
+                        <h2 class="text-lg font-bold text-slate-800">Database Peserta Terapi</h2>
+                        <p class="text-xs text-slate-500">Kelola data seluruh peserta (Sanggup menampung >70 peserta)</p>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button onclick="exportCSV('peserta')" class="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5">
+                            <i data-lucide="download" class="w-4 h-4"></i> Ekspor Excel/CSV
+                        </button>
+                        <button onclick="openModalPeserta()" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5">
+                            <i data-lucide="plus" class="w-4 h-4"></i> Tambah Peserta
+                        </button>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200">
+                    <input type="text" id="search-peserta" oninput="renderTablePeserta()" placeholder="Cari ID / Nama Peserta..." class="px-3 py-1.5 text-xs rounded-lg border border-slate-300">
+                    <select id="filter-peserta-kelompok" onchange="renderTablePeserta()" class="px-3 py-1.5 text-xs rounded-lg border border-slate-300">
+                        <option value="ALL">Semua Kelompok</option>
+                        <option value="Kelompok A">Kelompok A</option>
+                        <option value="Kelompok B">Kelompok B</option>
+                        <option value="Kelompok C">Kelompok C</option>
+                    </select>
+                    <select id="filter-peserta-status" onchange="renderTablePeserta()" class="px-3 py-1.5 text-xs rounded-lg border border-slate-300">
+                        <option value="ALL">Semua Status Keanggotaan</option>
+                        <option value="Aktif">Aktif</option>
+                        <option value="Non-Aktif">Non-Aktif</option>
+                    </select>
+                </div>
+
+                <div class="overflow-x-auto rounded-xl border border-slate-200">
+                    <table class="w-full text-left text-xs">
+                        <thead class="bg-slate-100 text-slate-700 font-semibold uppercase">
+                            <tr>
+                                <th class="p-3 w-10 text-center">No</th>
+                                <th class="p-3">ID Peserta</th>
+                                <th class="p-3">Nama Lengkap</th>
+                                <th class="p-3">Kelompok</th>
+                                <th class="p-3">Status Keanggotaan</th>
+                                <th class="p-3 text-center">Tingkat Keaktifan (Auto)</th>
+                                <th class="p-3">Keterangan</th>
+                                <th class="p-3 text-center">Aksi</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbody-peserta" class="divide-y divide-slate-200 bg-white">
+                            <!-- Data peserta dirender lewat JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- SECTION 2B: DATA FASILITATOR -->
+            <section id="section-DATA_FASILITATOR" class="space-y-4 hidden">
+                <div class="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-200">
+                    <div>
+                        <h2 class="text-lg font-bold text-slate-800">Database Fasilitator Terapi</h2>
+                        <p class="text-xs text-slate-500">Kelola tim pengampu kegiatan terapi</p>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button onclick="exportCSV('fasilitator')" class="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5">
+                            <i data-lucide="download" class="w-4 h-4"></i> Ekspor Excel/CSV
+                        </button>
+                        <button onclick="openModalFasilitator()" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5">
+                            <i data-lucide="plus" class="w-4 h-4"></i> Tambah Fasilitator
+                        </button>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-slate-50 p-3 rounded-xl border border-slate-200">
+                    <input type="text" id="search-fasilitator" oninput="renderTableFasilitator()" placeholder="Cari Nama / ID Fasilitator..." class="px-3 py-1.5 text-xs rounded-lg border border-slate-300">
+                    <select id="filter-fasilitator-terapi" onchange="renderTableFasilitator()" class="px-3 py-1.5 text-xs rounded-lg border border-slate-300">
+                        <option value="ALL">Semua Jenis Terapi</option>
+                    </select>
+                </div>
+
+                <div class="overflow-x-auto rounded-xl border border-slate-200">
+                    <table class="w-full text-left text-xs">
+                        <thead class="bg-slate-100 text-slate-700 font-semibold uppercase">
+                            <tr>
+                                <th class="p-3 w-10 text-center">No</th>
+                                <th class="p-3">ID Fasilitator</th>
+                                <th class="p-3">Nama Fasilitator</th>
+                                <th class="p-3">Spesialisasi Terapi</th>
+                                <th class="p-3">Status</th>
+                                <th class="p-3">Keterangan</th>
+                                <th class="p-3 text-center">Aksi</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbody-fasilitator" class="divide-y divide-slate-200 bg-white">
+                            <!-- Data fasilitator dirender lewat JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- SECTION 2C: DATA TERAPI -->
+            <section id="section-DATA_TERAPI" class="space-y-4 hidden">
+                <div class="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-200">
+                    <div>
+                        <h2 class="text-lg font-bold text-slate-800">Daftar Jenis Terapi</h2>
+                        <p class="text-xs text-slate-500">Kelola kategori kegiatan terapi pemulihan</p>
+                    </div>
+                    <button onclick="exportCSV('terapi')" class="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5">
+                        <i data-lucide="download" class="w-4 h-4"></i> Ekspor Excel/CSV
+                    </button>
+                </div>
+
+                <form onsubmit="simpanTerapi(event)" class="bg-slate-50 p-4 rounded-xl border border-slate-200 flex flex-col sm:flex-row gap-3">
+                    <input type="text" id="input-nama-terapi" placeholder="Tuliskan nama jenis terapi baru..." class="flex-1 px-3 py-2 text-xs rounded-xl border border-slate-300" required>
+                    <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5">
+                        <i data-lucide="plus" class="w-4 h-4"></i> Tambah Terapi
+                    </button>
+                </form>
+
+                <div id="grid-terapi" class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <!-- Cards Terapi Dirender JS -->
+                </div>
+            </section>
+
+            <!-- SECTION 2D: DATA MATERI -->
+            <section id="section-DATA_MATERI" class="space-y-4 hidden">
+                <div class="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-200">
+                    <div>
+                        <h2 class="text-lg font-bold text-slate-800">Database Judul Materi Terapi</h2>
+                        <p class="text-xs text-slate-500">Kelola materi pembelajaran & pemulihan</p>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button onclick="exportCSV('materi')" class="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5">
+                            <i data-lucide="download" class="w-4 h-4"></i> Ekspor Excel/CSV
+                        </button>
+                        <button onclick="openModalMateri()" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5">
+                            <i data-lucide="plus" class="w-4 h-4"></i> Tambah Materi
+                        </button>
+                    </div>
+                </div>
+
+                <div class="overflow-x-auto rounded-xl border border-slate-200">
+                    <table class="w-full text-left text-xs">
+                        <thead class="bg-slate-100 text-slate-700 font-semibold uppercase">
+                            <tr>
+                                <th class="p-3 w-10 text-center">No</th>
+                                <th class="p-3">Jenis Terapi</th>
+                                <th class="p-3">Judul Materi</th>
+                                <th class="p-3">Fasilitator</th>
+                                <th class="p-3">Hari & Jam</th>
+                                <th class="p-3 text-center">Aksi</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbody-materi" class="divide-y divide-slate-200 bg-white">
+                            <!-- Data materi dirender JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- SECTION 3: ABSEN PESERTA -->
+            <section id="section-ABSEN_PESERTA" class="space-y-4 hidden">
+                <div class="flex flex-wrap justify-between items-center gap-3 pb-3 border-b border-slate-200">
+                    <div>
+                        <h2 class="text-lg font-bold text-slate-800">Form Absensi Peserta Terapi</h2>
+                        <p class="text-xs text-slate-500">Pencatatan kehadiran peserta harian dengan pembagian kelompok kelas</p>
+                    </div>
+                    <div class="flex gap-2">
+                        <button onclick="hapusAbsenPeserta()" id="btn-hapus-absen-peserta" class="bg-rose-600 hover:bg-rose-700 text-white px-3 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 hidden shadow">
+                            <i data-lucide="trash-2" class="w-4 h-4"></i> Hapus Rekap
+                        </button>
+                        <button onclick="resetFormAbsenPeserta()" class="bg-slate-200 hover:bg-slate-300 text-slate-700 px-3 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5">
+                            <i data-lucide="rotate-ccw" class="w-4 h-4"></i> Reset Form
+                        </button>
+                        <button onclick="simpanAbsenPeserta()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 shadow">
+                            <i data-lucide="check-circle" class="w-4 h-4"></i> Simpan Absensi Ke Cloud
+                        </button>
+                    </div>
+                </div>
+
+                <div class="bg-slate-50 p-4 rounded-xl border border-slate-200 grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs">
+                    <div>
+                        <label class="block font-semibold text-slate-700 mb-1">Tanggal Kegiatan</label>
+                        <input type="date" id="absen-tanggal" onchange="loadExistingAbsenPeserta()" class="w-full px-3 py-1.5 rounded-lg border border-slate-300">
+                    </div>
+                    <div>
+                        <label class="block font-semibold text-slate-700 mb-1">Jenis Terapi</label>
+                        <select id="absen-jenis-terapi" onchange="autoFillMateri(); loadExistingAbsenPeserta();" class="w-full px-3 py-1.5 rounded-lg border border-slate-300 font-semibold text-blue-700"></select>
+                    </div>
+                    <div>
+                        <label class="block font-semibold text-slate-700 mb-1">Pembagian Kelompok / Kelas</label>
+                        <select id="absen-kelompok" onchange="renderFormAbsenPeserta()" class="w-full px-3 py-1.5 rounded-lg border border-slate-300 font-semibold text-indigo-700">
+                            <option value="ALL">Semua Kelompok (Gabungan)</option>
+                            <option value="Kelompok A">Kelompok A</option>
+                            <option value="Kelompok B">Kelompok B</option>
+                            <option value="Kelompok C">Kelompok C</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block font-semibold text-slate-700 mb-1">Fasilitator Pengampu</label>
+                        <select id="absen-fasilitator" class="w-full px-3 py-1.5 rounded-lg border border-slate-300"></select>
+                    </div>
+                    <div class="sm:col-span-2">
+                        <label class="block font-semibold text-slate-700 mb-1">Nama Materi Terapi</label>
+                        <select id="absen-materi-select" onchange="document.getElementById('absen-materi').value = this.value" class="w-full px-3 py-1.5 rounded-lg border border-slate-300 mb-1">
+                            <option value="">-- Pilih dari Database Materi --</option>
+                        </select>
+                        <input type="text" id="absen-materi" placeholder="Atau ketikkan judul materi secara manual..." class="w-full px-3 py-1.5 rounded-lg border border-slate-300">
+                    </div>
+                    <div class="flex gap-2">
+                        <div>
+                            <label class="block font-semibold text-slate-700 mb-1">Jam Mulai</label>
+                            <input type="time" id="absen-jam-mulai" value="08:00" class="w-full px-2 py-1.5 rounded-lg border border-slate-300">
+                        </div>
+                        <div>
+                            <label class="block font-semibold text-slate-700 mb-1">Jam Selesai</label>
+                            <input type="time" id="absen-jam-selesai" value="09:30" class="w-full px-2 py-1.5 rounded-lg border border-slate-300">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block font-semibold text-slate-700 mb-1">Catatan Kelas</label>
+                        <input type="text" id="absen-catatan" placeholder="Catatan kelas..." class="w-full px-3 py-1.5 rounded-lg border border-slate-300">
+                    </div>
+                </div>
+
+                <div class="bg-blue-50 border border-blue-200 rounded-xl p-3 flex flex-wrap items-center justify-between gap-3 text-xs">
+                    <div class="flex gap-4 font-semibold">
+                        <span id="stat-hadir" class="text-emerald-700">Hadir: 0</span>
+                        <span id="stat-izin" class="text-blue-700">Izin: 0</span>
+                        <span id="stat-sakit" class="text-amber-700">Sakit: 0</span>
+                        <span id="stat-alpa" class="text-rose-700">Alpa: 0</span>
+                    </div>
+                    <div id="stat-persentase" class="font-bold text-blue-900 bg-white px-3 py-1 rounded-lg border border-blue-200">Persentase: 0%</div>
+                </div>
+
+                <div class="flex justify-between items-center text-xs">
+                    <span class="text-slate-500 font-medium">Tandai Sekaligus:</span>
+                    <div class="flex gap-1.5">
+                        <button onclick="markAllStatus('H')" class="px-2.5 py-1 bg-emerald-100 text-emerald-800 font-semibold rounded hover:bg-emerald-200">Semua Hadir (H)</button>
+                        <button onclick="markAllStatus('I')" class="px-2.5 py-1 bg-blue-100 text-blue-800 font-semibold rounded hover:bg-blue-200">Semua Izin (I)</button>
+                        <button onclick="markAllStatus('S')" class="px-2.5 py-1 bg-amber-100 text-amber-800 font-semibold rounded hover:bg-amber-200">Semua Sakit (S)</button>
+                        <button onclick="markAllStatus('A')" class="px-2.5 py-1 bg-rose-100 text-rose-800 font-semibold rounded hover:bg-rose-200">Semua Alpa (A)</button>
+                    </div>
+                </div>
+
+                <div class="overflow-x-auto rounded-xl border border-slate-200">
+                    <table class="w-full text-left text-xs">
+                        <thead class="bg-slate-100 text-slate-700 font-semibold uppercase">
+                            <tr>
+                                <th class="p-3 w-10 text-center">No</th>
+                                <th class="p-3">ID Peserta</th>
+                                <th class="p-3">Nama Peserta</th>
+                                <th class="p-3">Kelompok Kelas</th>
+                                <th class="p-3 text-center">Status Kehadiran</th>
+                                <th class="p-3">Keterangan</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbody-absen-peserta" class="divide-y divide-slate-200 bg-white">
+                            <!-- Render baris absensi peserta -->
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- SECTION 3B: ABSEN FASILITATOR -->
+            <section id="section-ABSEN_FASILITATOR" class="space-y-4 hidden">
+                <div class="flex flex-wrap justify-between items-center gap-3 pb-3 border-b border-slate-200">
+                    <div>
+                        <h2 class="text-lg font-bold text-slate-800">Form Absensi Fasilitator</h2>
+                        <p class="text-xs text-slate-500">Pencatatan kehadiran dan jadwal fasilitator</p>
+                    </div>
+                    <div class="flex gap-2">
+                        <button onclick="hapusAbsenFasilitator()" id="btn-hapus-absen-fasilitator" class="bg-rose-600 hover:bg-rose-700 text-white px-3 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5 hidden shadow">
+                            <i data-lucide="trash-2" class="w-4 h-4"></i> Hapus Rekap
+                        </button>
+                        <button onclick="simpanAbsenFasilitator()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 shadow">
+                            <i data-lucide="check-circle" class="w-4 h-4"></i> Simpan Absensi Fasilitator
+                        </button>
+                    </div>
+                </div>
+
+                <div class="bg-slate-50 p-4 rounded-xl border border-slate-200 text-xs">
+                    <label class="block font-semibold text-slate-700 mb-1">Tanggal Kegiatan</label>
+                    <input type="date" id="absen-fasilitator-tanggal" onchange="renderFormAbsenFasilitator()" class="px-3 py-1.5 rounded-lg border border-slate-300">
+                </div>
+
+                <div class="overflow-x-auto rounded-xl border border-slate-200">
+                    <table class="w-full text-left text-xs">
+                        <thead class="bg-slate-100 text-slate-700 font-semibold uppercase">
+                            <tr>
+                                <th class="p-3 w-10 text-center">No</th>
+                                <th class="p-3">Fasilitator</th>
+                                <th class="p-3">Jenis Terapi</th>
+                                <th class="p-3">Materi yang Dibawakan</th>
+                                <th class="p-3 text-center">Status Kehadiran</th>
+                                <th class="p-3">Keterangan</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbody-absen-fasilitator" class="divide-y divide-slate-200 bg-white">
+                            <!-- Render form absensi fasilitator -->
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- SECTION 4: REKAP HARIAN -->
+            <section id="section-REKAP_HARIAN" class="space-y-4 hidden">
+                <div class="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-200 no-print">
+                    <div>
+                        <h2 class="text-lg font-bold text-slate-800">Rekap Harian Kehadiran Peserta</h2>
+                        <p class="text-xs text-slate-500">Laporan cetak resmi A4 harian berdasarkan tanggal & sesi terapi</p>
+                    </div>
+                    <div class="flex flex-wrap gap-2">
+                        <button onclick="exportCSV('rekap_harian')" class="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5">
+                            <i data-lucide="download" class="w-4 h-4"></i> Ekspor CSV
+                        </button>
+                        <button onclick="downloadPDF('rekap-harian-print-area', 'Rekap_Harian_Terapi')" class="bg-rose-600 hover:bg-rose-700 text-white px-3 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5">
+                            <i data-lucide="file-down" class="w-4 h-4"></i> Download PDF
+                        </button>
+                        <button onclick="window.print()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5">
+                            <i data-lucide="printer" class="w-4 h-4"></i> CETAK LAPORAN (A4)
+                        </button>
+                    </div>
+                </div>
+
+                <div class="bg-slate-50 p-3 rounded-xl border border-slate-200 flex flex-wrap gap-3 items-end text-xs no-print">
+                    <div>
+                        <label class="block font-semibold text-slate-700 mb-1">Pilih Tanggal Laporan</label>
+                        <input type="date" id="filter-rekap-harian-tanggal" onchange="renderRekapHarian()" class="px-3 py-1.5 rounded-lg border border-slate-300">
+                    </div>
+                    <div>
+                        <label class="block font-semibold text-slate-700 mb-1">Pilih Sesi / Jenis Terapi</label>
+                        <select id="filter-rekap-harian-terapi" onchange="renderRekapHarian()" class="px-3 py-1.5 rounded-lg border border-slate-300 font-semibold text-blue-700">
+                            <option value="ALL">Semua Terapi Pada Tanggal Ini</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Printable Document Area -->
+                <div id="rekap-harian-print-area" class="print-area font-serif text-black p-6 bg-white border border-slate-200 rounded-xl shadow-sm">
+                    <div class="text-center border-b-2 border-black pb-3 mb-4">
+                        <h1 id="print-nama-lembaga" class="text-xl font-bold uppercase">PONDOK PEMULIHAN SAHABAT YOGYAKARTA</h1>
+                        <p id="print-alamat" class="text-xs italic">Jl. Raya Jogja - Solo KM. 11, Kalasan, Sleman, Yogyakarta</p>
+                    </div>
+
+                    <div class="text-center mb-4">
+                        <h2 class="text-base font-bold uppercase underline">LAPORAN REKAPITULASI KEHADIRAN HARIAN TERAPI</h2>
+                        <p class="text-xs font-sans mt-1">Tanggal: <span id="rekap-tgl-text"></span></p>
+                    </div>
+
+                    <div id="rekap-harian-content" class="space-y-6 text-xs font-sans">
+                        <!-- Konten Rekap Harian dirender dinamis -->
+                    </div>
+
+                    <!-- Kolom Tanda Tangan -->
+                    <div class="mt-12 grid grid-cols-2 text-center text-xs font-sans page-break-inside-avoid">
+                        <div>
+                            <p>Mengetahui,</p>
+                            <p id="print-jabatan" class="font-bold">Pimpinan Lembaga</p>
+                            <div class="h-16"></div>
+                            <p id="print-pimpinan" class="font-bold underline">Bpk. Drs. H. Ahmad Wijaya, M.Si</p>
+                        </div>
+                        <div>
+                            <p>Yogyakarta, <span class="print-date-text"></span></p>
+                            <p class="font-bold">Fasilitator / Admin Terapi</p>
+                            <div class="h-16"></div>
+                            <p class="font-bold underline">( _______________________ )</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- SECTION 4B: REKAP PER KEGIATAN / MATERI -->
+            <section id="section-REKAP_KEGIATAN" class="space-y-4 hidden">
+                <div class="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-200 no-print">
+                    <div>
+                        <h2 class="text-lg font-bold text-slate-800">Rekapitulasi per Jenis Kegiatan & Materi Terapi</h2>
+                        <p class="text-xs text-slate-500">Evaluasi frekuensi pelaksanaan kegiatan, jumlah kehadiran kumulatif, dan rata-rata partisipasi</p>
+                    </div>
+                    <div class="flex flex-wrap gap-2">
+                        <button onclick="exportCSV('rekap_kegiatan')" class="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5">
+                            <i data-lucide="download" class="w-4 h-4"></i> Ekspor CSV
+                        </button>
+                        <button onclick="downloadPDF('rekap-kegiatan-print-area', 'Rekap_Per_Kegiatan')" class="bg-rose-600 hover:bg-rose-700 text-white px-3 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5">
+                            <i data-lucide="file-down" class="w-4 h-4"></i> Download PDF
+                        </button>
+                        <button onclick="window.print()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5">
+                            <i data-lucide="printer" class="w-4 h-4"></i> CETAK REKAP KEGIATAN
+                        </button>
+                    </div>
+                </div>
+
+                <div class="bg-slate-50 p-3 rounded-xl border border-slate-200 flex flex-wrap gap-3 items-end text-xs no-print">
+                    <div>
+                        <label class="block font-semibold text-slate-700 mb-1">Filter Bulan & Tahun</label>
+                        <input type="month" id="filter-kegiatan-bulan" onchange="renderRekapKegiatan()" class="px-3 py-1.5 rounded-lg border border-slate-300">
+                    </div>
+                    <div>
+                        <label class="block font-semibold text-slate-700 mb-1">Filter Jenis Terapi</label>
+                        <select id="filter-kegiatan-terapi" onchange="renderRekapKegiatan()" class="px-3 py-1.5 rounded-lg border border-slate-300 font-semibold text-blue-700">
+                            <option value="ALL">Semua Jenis Terapi</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Printable Document Area -->
+                <div id="rekap-kegiatan-print-area" class="print-area font-serif text-black p-6 bg-white border border-slate-200 rounded-xl shadow-sm">
+                    <div class="text-center border-b-2 border-black pb-2 mb-3">
+                        <h1 class="text-lg font-bold uppercase text-lembaga-print">PONDOK PEMULIHAN SAHABAT YOGYAKARTA</h1>
+                        <p class="text-xs italic text-alamat-print">Jl. Raya Jogja - Solo KM. 11, Kalasan, Sleman, Yogyakarta</p>
+                    </div>
+
+                    <div class="text-center mb-4">
+                        <h2 class="text-sm font-bold uppercase underline">LAPORAN REKAPITULASI KEGIATAN & MATERI TERAPI</h2>
+                        <p class="text-xs font-sans">Periode Bulan: <span id="rekap-kegiatan-bulan-text"></span></p>
+                    </div>
+
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-xs border-collapse border border-black font-sans">
+                            <thead>
+                                <tr class="bg-slate-200 text-center font-bold">
+                                    <th class="border border-black p-1.5 w-8">No</th>
+                                    <th class="border border-black p-1.5 text-left">Jenis Terapi</th>
+                                    <th class="border border-black p-1.5 text-left">Materi / Topik Kegiatan</th>
+                                    <th class="border border-black p-1.5">Total Sesi Pelaksanaan</th>
+                                    <th class="border border-black p-1.5">Total Hadir (H)</th>
+                                    <th class="border border-black p-1.5">Total I/S/A</th>
+                                    <th class="border border-black p-1.5">Rata-rata Kehadiran</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbody-rekap-kegiatan">
+                                <!-- Render Rekap per Kegiatan -->
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="mt-8 grid grid-cols-2 text-center text-xs font-sans page-break-inside-avoid">
+                        <div>
+                            <p>Mengetahui,</p>
+                            <p class="font-bold print-jabatan-text">Pimpinan Lembaga</p>
+                            <div class="h-14"></div>
+                            <p class="font-bold underline print-pimpinan-text">Bpk. Drs. H. Ahmad Wijaya, M.Si</p>
+                        </div>
+                        <div>
+                            <p>Yogyakarta, <span class="print-date-text"></span></p>
+                            <p class="font-bold">Koordinator Program Terapi</p>
+                            <div class="h-14"></div>
+                            <p class="font-bold underline">( _______________________ )</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- SECTION 5: REKAP MINGGUAN -->
+            <section id="section-REKAP_MINGGUAN" class="space-y-4 hidden">
+                <div class="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-200 no-print">
+                    <div>
+                        <h2 class="text-lg font-bold text-slate-800">Rekap Mingguan Kehadiran Peserta</h2>
+                        <p class="text-xs text-slate-500">Matriks kehadiran mingguan dan keaktifan peserta</p>
+                    </div>
+                    <div class="flex flex-wrap gap-2">
+                        <button onclick="exportCSV('rekap_mingguan')" class="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5">
+                            <i data-lucide="download" class="w-4 h-4"></i> Ekspor CSV
+                        </button>
+                        <button onclick="downloadPDF('rekap-mingguan-print-area', 'Rekap_Mingguan_Terapi')" class="bg-rose-600 hover:bg-rose-700 text-white px-3 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5">
+                            <i data-lucide="file-down" class="w-4 h-4"></i> Download PDF
+                        </button>
+                        <button onclick="window.print()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5">
+                            <i data-lucide="printer" class="w-4 h-4"></i> CETAK REKAP MINGGUAN
+                        </button>
+                    </div>
+                </div>
+
+                <div class="bg-slate-50 p-3 rounded-xl border border-slate-200 flex flex-wrap gap-3 text-xs no-print">
+                    <div>
+                        <label class="block font-semibold text-slate-700 mb-1">Pilih Minggu Ke-</label>
+                        <select id="filter-mingguan-minggu" onchange="renderRekapMingguan()" class="px-3 py-1.5 rounded-lg border border-slate-300">
+                            <option value="1">Minggu Ke-1 (Tgl 1-7)</option>
+                            <option value="2">Minggu Ke-2 (Tgl 8-14)</option>
+                            <option value="3">Minggu Ke-3 (Tgl 15-21)</option>
+                            <option value="4">Minggu Ke-4 (Tgl 22-28)</option>
+                            <option value="5">Minggu Ke-5 (Tgl 29-31)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block font-semibold text-slate-700 mb-1">Pilih Bulan & Tahun</label>
+                        <input type="month" id="filter-mingguan-bulan" onchange="renderRekapMingguan()" class="px-3 py-1.5 rounded-lg border border-slate-300">
+                    </div>
+                </div>
+
+                <div id="rekap-mingguan-print-area" class="print-area font-serif text-black p-6 bg-white border border-slate-200 rounded-xl shadow-sm">
+                    <div class="text-center border-b-2 border-black pb-2 mb-3">
+                        <h1 class="text-lg font-bold uppercase text-lembaga-print">PONDOK PEMULIHAN SAHABAT YOGYAKARTA</h1>
+                        <p class="text-xs italic text-alamat-print">Jl. Raya Jogja - Solo KM. 11, Kalasan, Sleman, Yogyakarta</p>
+                    </div>
+
+                    <div class="text-center mb-4">
+                        <h2 class="text-sm font-bold uppercase underline">REKAPITULASI KEHADIRAN MINGGUAN PESERTA</h2>
+                        <p class="text-xs font-sans"><span id="rekap-mingguan-minggu-text">Minggu Ke-1</span> | Bulan: <span id="rekap-mingguan-bulan-text"></span></p>
+                    </div>
+
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-xs border-collapse border border-black font-sans">
+                            <thead>
+                                <tr class="bg-slate-200 text-center font-bold">
+                                    <th class="border border-black p-1 w-8">No</th>
+                                    <th class="border border-black p-1 text-left">Nama Peserta</th>
+                                    <th class="border border-black p-1">Kelompok</th>
+                                    <th class="border border-black p-1">Total Hadir</th>
+                                    <th class="border border-black p-1">Izin</th>
+                                    <th class="border border-black p-1">Sakit</th>
+                                    <th class="border border-black p-1">Alpa</th>
+                                    <th class="border border-black p-1">% Kehadiran</th>
+                                    <th class="border border-black p-1">Keaktifan (Auto)</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbody-rekap-mingguan">
+                                <!-- Render Rekap Mingguan -->
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="mt-8 grid grid-cols-2 text-center text-xs font-sans page-break-inside-avoid">
+                        <div>
+                            <p>Mengetahui,</p>
+                            <p class="font-bold print-jabatan-text">Pimpinan Lembaga</p>
+                            <div class="h-14"></div>
+                            <p class="font-bold underline print-pimpinan-text">Bpk. Drs. H. Ahmad Wijaya, M.Si</p>
+                        </div>
+                        <div>
+                            <p>Yogyakarta, <span class="print-date-text"></span></p>
+                            <p class="font-bold">Koordinator Terapi</p>
+                            <div class="h-14"></div>
+                            <p class="font-bold underline">( _______________________ )</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- SECTION 6: REKAP BULANAN -->
+            <section id="section-REKAP_BULANAN" class="space-y-4 hidden">
+                <div class="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-200 no-print">
+                    <div>
+                        <h2 class="text-lg font-bold text-slate-800">Rekap Bulanan Kehadiran Peserta</h2>
+                        <p class="text-xs text-slate-500">Akumulasi persentase kehadiran dan kategori keaktifan per bulan berdasarkan jenis terapi</p>
+                    </div>
+                    <div class="flex flex-wrap gap-2">
+                        <button onclick="exportCSV('rekap_bulanan')" class="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5">
+                            <i data-lucide="download" class="w-4 h-4"></i> Ekspor CSV
+                        </button>
+                        <button onclick="downloadPDF('rekap-bulanan-print-area', 'Rekap_Bulanan_Terapi')" class="bg-rose-600 hover:bg-rose-700 text-white px-3 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5">
+                            <i data-lucide="file-down" class="w-4 h-4"></i> Download PDF
+                        </button>
+                        <button onclick="window.print()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5">
+                            <i data-lucide="printer" class="w-4 h-4"></i> CETAK REKAP BULANAN
+                        </button>
+                    </div>
+                </div>
+
+                <div class="bg-slate-50 p-3 rounded-xl border border-slate-200 flex flex-wrap gap-3 items-end text-xs no-print">
+                    <div>
+                        <label class="block font-semibold text-slate-700 mb-1">Pilih Bulan & Tahun</label>
+                        <input type="month" id="filter-bulanan-bulan" onchange="renderRekapBulanan()" class="px-3 py-1.5 rounded-lg border border-slate-300">
+                    </div>
+                    <div>
+                        <label class="block font-semibold text-slate-700 mb-1">Pilih Jenis Terapi</label>
+                        <select id="filter-bulanan-terapi" onchange="renderRekapBulanan()" class="px-3 py-1.5 rounded-lg border border-slate-300 font-semibold text-blue-700">
+                            <option value="ALL">Semua Jenis Terapi</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div id="rekap-bulanan-print-area" class="print-area font-serif text-black p-6 bg-white border border-slate-200 rounded-xl shadow-sm">
+                    <div class="text-center border-b-2 border-black pb-2 mb-3">
+                        <h1 class="text-lg font-bold uppercase text-lembaga-print">PONDOK PEMULIHAN SAHABAT YOGYAKARTA</h1>
+                        <p class="text-xs italic text-alamat-print">Jl. Raya Jogja - Solo KM. 11, Kalasan, Sleman, Yogyakarta</p>
+                    </div>
+
+                    <div class="text-center mb-4">
+                        <h2 class="text-sm font-bold uppercase underline">LAPORAN REKAPITULASI BULANAN KEHADIRAN & KEAKTIFAN PESERTA</h2>
+                        <p class="text-xs font-sans">Bulan: <span id="rekap-bulanan-bulan-text"></span> | Terapi: <span id="rekap-bulanan-terapi-text">Semua Jenis Terapi</span></p>
+                    </div>
+
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-xs border-collapse border border-black font-sans">
+                            <thead>
+                                <tr class="bg-slate-200 text-center font-bold">
+                                    <th class="border border-black p-1 w-8">No</th>
+                                    <th class="border border-black p-1 w-20">ID Peserta</th>
+                                    <th class="border border-black p-1 text-left">Nama Peserta</th>
+                                    <th class="border border-black p-1">Kelompok</th>
+                                    <th class="border border-black p-1">Jumlah Sesi</th>
+                                    <th class="border border-black p-1">Hadir (H)</th>
+                                    <th class="border border-black p-1">Izin (I)</th>
+                                    <th class="border border-black p-1">Sakit (S)</th>
+                                    <th class="border border-black p-1">Alpa (A)</th>
+                                    <th class="border border-black p-1">% Kehadiran</th>
+                                    <th class="border border-black p-1">Status Keaktifan</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbody-rekap-bulanan">
+                                <!-- Render Rekap Bulanan -->
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="mt-8 grid grid-cols-2 text-center text-xs font-sans page-break-inside-avoid">
+                        <div>
+                            <p>Mengetahui,</p>
+                            <p class="font-bold print-jabatan-text">Pimpinan Lembaga</p>
+                            <div class="h-14"></div>
+                            <p class="font-bold underline print-pimpinan-text">Bpk. Drs. H. Ahmad Wijaya, M.Si</p>
+                        </div>
+                        <div>
+                            <p>Yogyakarta, <span class="print-date-text"></span></p>
+                            <p class="font-bold">Penanggung Jawab Absensi</p>
+                            <div class="h-14"></div>
+                            <p class="font-bold underline">( _______________________ )</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- SECTION 7: REKAP FASILITATOR -->
+            <section id="section-REKAP_FASILITATOR" class="space-y-4 hidden">
+                <div class="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-200 no-print">
+                    <div>
+                        <h2 class="text-lg font-bold text-slate-800">Rekapitulasi Absensi Fasilitator</h2>
+                        <p class="text-xs text-slate-500">Laporan kehadiran dan keaktifan fasilitator bulanan</p>
+                    </div>
+                    <div class="flex flex-wrap gap-2">
+                        <button onclick="exportCSV('rekap_fasilitator')" class="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5">
+                            <i data-lucide="download" class="w-4 h-4"></i> Ekspor CSV
+                        </button>
+                        <button onclick="downloadPDF('rekap-fasilitator-print-area', 'Rekap_Fasilitator')" class="bg-rose-600 hover:bg-rose-700 text-white px-3 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5">
+                            <i data-lucide="file-down" class="w-4 h-4"></i> Download PDF
+                        </button>
+                        <button onclick="window.print()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5">
+                            <i data-lucide="printer" class="w-4 h-4"></i> CETAK REKAP FASILITATOR
+                        </button>
+                    </div>
+                </div>
+
+                <div class="bg-slate-50 p-3 rounded-xl border border-slate-200 flex flex-wrap gap-3 items-end text-xs no-print">
+                    <div>
+                        <label class="block font-semibold text-slate-700 mb-1">Pilih Bulan & Tahun</label>
+                        <input type="month" id="filter-fasilitator-bulan" onchange="renderRekapFasilitator()" class="px-3 py-1.5 rounded-lg border border-slate-300">
+                    </div>
+                </div>
+
+                <!-- Printable Area -->
+                <div id="rekap-fasilitator-print-area" class="print-area font-serif text-black p-6 bg-white border border-slate-200 rounded-xl shadow-sm">
+                    <div class="text-center border-b-2 border-black pb-2 mb-3">
+                        <h1 class="text-lg font-bold uppercase text-lembaga-print">PONDOK PEMULIHAN SAHABAT YOGYAKARTA</h1>
+                        <p class="text-xs italic text-alamat-print">Jl. Raya Jogja - Solo KM. 11, Kalasan, Sleman, Yogyakarta</p>
+                    </div>
+
+                    <div class="text-center mb-4">
+                        <h2 class="text-sm font-bold uppercase underline">LAPORAN REKAPITULASI KEHADIRAN FASILITATOR</h2>
+                        <p class="text-xs font-sans">Bulan: <span id="rekap-fas-bulan-text"></span></p>
+                    </div>
+
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-xs border-collapse border border-black font-sans">
+                            <thead>
+                                <tr class="bg-slate-200 text-center font-bold">
+                                    <th class="border border-black p-1 w-8">No</th>
+                                    <th class="border border-black p-1 w-24">ID Fasilitator</th>
+                                    <th class="border border-black p-1 text-left">Nama Fasilitator</th>
+                                    <th class="border border-black p-1">Spesialisasi</th>
+                                    <th class="border border-black p-1">Jml Hari Jadwal</th>
+                                    <th class="border border-black p-1">Hadir (H)</th>
+                                    <th class="border border-black p-1">Izin (I)</th>
+                                    <th class="border border-black p-1">Alpa (A)</th>
+                                    <th class="border border-black p-1">% Kehadiran</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbody-rekap-fasilitator">
+                                <!-- Render Rekap Fasilitator -->
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="mt-8 grid grid-cols-2 text-center text-xs font-sans page-break-inside-avoid">
+                        <div>
+                            <p>Mengetahui,</p>
+                            <p class="font-bold print-jabatan-text">Pimpinan Lembaga</p>
+                            <div class="h-14"></div>
+                            <p class="font-bold underline print-pimpinan-text">Bpk. Drs. H. Ahmad Wijaya, M.Si</p>
+                        </div>
+                        <div>
+                            <p>Yogyakarta, <span class="print-date-text"></span></p>
+                            <p class="font-bold">Penanggung Jawab Jadwal</p>
+                            <div class="h-14"></div>
+                            <p class="font-bold underline">( _______________________ )</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- SECTION PENGATURAN -->
+            <section id="section-PENGATURAN" class="space-y-4 hidden">
+                <div class="pb-3 border-b border-slate-200">
+                    <h2 class="text-lg font-bold text-slate-800">Pengaturan Lembaga & Pemeliharaan Database</h2>
+                    <p class="text-xs text-slate-500">Ubah identitas lembaga atau lakukan pembersihan data absensi</p>
+                </div>
+
+                <form onsubmit="simpanPengaturan(event)" class="space-y-3 max-w-lg text-xs">
+                    <div>
+                        <label class="block font-semibold text-slate-700 mb-1">Nama Lembaga</label>
+                        <input type="text" id="set-nama-lembaga" class="w-full px-3 py-2 border rounded-xl" required>
+                    </div>
+                    <div>
+                        <label class="block font-semibold text-slate-700 mb-1">Alamat Lengkap</label>
+                        <textarea id="set-alamat" rows="2" class="w-full px-3 py-2 border rounded-xl" required></textarea>
+                    </div>
+                    <div>
+                        <label class="block font-semibold text-slate-700 mb-1">Nama Pimpinan</label>
+                        <input type="text" id="set-pimpinan" class="w-full px-3 py-2 border rounded-xl" required>
+                    </div>
+                    <div>
+                        <label class="block font-semibold text-slate-700 mb-1">Jabatan Pimpinan</label>
+                        <input type="text" id="set-jabatan" class="w-full px-3 py-2 border rounded-xl" required>
+                    </div>
+                    <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl font-bold">Simpan Pengaturan Identitas</button>
+                </form>
+
+                <div class="pt-6 border-t border-slate-200 max-w-lg">
+                    <h3 class="text-sm font-bold text-rose-700 mb-1">Aksi Pembersihan / Reset Data</h3>
+                    <p class="text-xs text-slate-500 mb-3">Tindakan ini akan mengosongkan seluruh histori absensi dari cloud database.</p>
+                    <button onclick="confirmResetAllAbsen()" class="bg-rose-600 hover:bg-rose-700 text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2">
+                        <i data-lucide="alert-triangle" class="w-4 h-4"></i> Reset Total Seluruh Data Absensi
+                    </button>
+                </div>
+            </section>
+            
+        </main>
+    </div>
+
+    <!-- MODAL PESERTA -->
+    <div id="modal-peserta" class="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl p-6 max-w-md w-full space-y-4">
+            <h3 id="title-modal-peserta" class="text-base font-bold text-slate-800">Tambah Peserta</h3>
+            <form onsubmit="simpanPeserta(event)" class="space-y-3 text-xs">
+                <input type="hidden" id="form-peserta-docid">
+                <div>
+                    <label class="block font-semibold text-slate-700 mb-1">ID Peserta</label>
+                    <input type="text" id="form-peserta-idpeserta" class="w-full px-3 py-2 border rounded-lg" required>
+                </div>
+                <div>
+                    <label class="block font-semibold text-slate-700 mb-1">Nama Lengkap</label>
+                    <input type="text" id="form-peserta-nama" class="w-full px-3 py-2 border rounded-lg" required>
+                </div>
+                <div>
+                    <label class="block font-semibold text-slate-700 mb-1">Kelompok Kelas</label>
+                    <select id="form-peserta-kelompok" class="w-full px-3 py-2 border rounded-lg">
+                        <option value="Kelompok A">Kelompok A</option>
+                        <option value="Kelompok B">Kelompok B</option>
+                        <option value="Kelompok C">Kelompok C</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block font-semibold text-slate-700 mb-1">Status Keanggotaan</label>
+                    <select id="form-peserta-status" class="w-full px-3 py-2 border rounded-lg">
+                        <option value="Aktif">Aktif</option>
+                        <option value="Non-Aktif">Non-Aktif</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block font-semibold text-slate-700 mb-1">Keterangan</label>
+                    <input type="text" id="form-peserta-ket" class="w-full px-3 py-2 border rounded-lg">
+                </div>
+                <div class="flex justify-end gap-2 pt-2">
+                    <button type="button" onclick="closeModalPeserta()" class="px-4 py-2 bg-slate-100 rounded-lg">Batal</button>
+                    <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold">Simpan Data</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL FASILITATOR -->
+    <div id="modal-fasilitator" class="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl p-6 max-w-md w-full space-y-4">
+            <h3 id="title-modal-fasilitator" class="text-base font-bold text-slate-800">Tambah Fasilitator</h3>
+            <form onsubmit="simpanFasilitator(event)" class="space-y-3 text-xs">
+                <input type="hidden" id="form-fasilitator-docid">
+                <div>
+                    <label class="block font-semibold text-slate-700 mb-1">ID Fasilitator</label>
+                    <input type="text" id="form-fasilitator-id" class="w-full px-3 py-2 border rounded-lg" required>
+                </div>
+                <div>
+                    <label class="block font-semibold text-slate-700 mb-1">Nama Fasilitator</label>
+                    <input type="text" id="form-fasilitator-nama" class="w-full px-3 py-2 border rounded-lg" required>
+                </div>
+                <div>
+                    <label class="block font-semibold text-slate-700 mb-1">Spesialisasi Terapi</label>
+                    <select id="form-fasilitator-terapi" class="w-full px-3 py-2 border rounded-lg"></select>
+                </div>
+                <div>
+                    <label class="block font-semibold text-slate-700 mb-1">Keterangan</label>
+                    <input type="text" id="form-fasilitator-ket" class="w-full px-3 py-2 border rounded-lg">
+                </div>
+                <div class="flex justify-end gap-2 pt-2">
+                    <button type="button" onclick="closeModalFasilitator()" class="px-4 py-2 bg-slate-100 rounded-lg">Batal</button>
+                    <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold">Simpan Data</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL TERAPI -->
+    <div id="modal-terapi" class="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl p-6 max-w-md w-full space-y-4">
+            <h3 id="title-modal-terapi" class="text-base font-bold text-slate-800">Edit Jenis Terapi</h3>
+            <form onsubmit="simpanTerapiModal(event)" class="space-y-3 text-xs">
+                <input type="hidden" id="form-terapi-docid">
+                <div>
+                    <label class="block font-semibold text-slate-700 mb-1">Nama Jenis Terapi</label>
+                    <input type="text" id="form-terapi-nama" class="w-full px-3 py-2 border rounded-lg" required>
+                </div>
+                <div class="flex justify-end gap-2 pt-2">
+                    <button type="button" onclick="closeModalTerapi()" class="px-4 py-2 bg-slate-100 rounded-lg">Batal</button>
+                    <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold">Simpan Data</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL MATERI -->
+    <div id="modal-materi" class="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl p-6 max-w-md w-full space-y-4">
+            <h3 id="title-modal-materi" class="text-base font-bold text-slate-800">Tambah Materi Terapi</h3>
+            <form onsubmit="simpanMateri(event)" class="space-y-3 text-xs">
+                <input type="hidden" id="form-materi-docid">
+                <div>
+                    <label class="block font-semibold text-slate-700 mb-1">Jenis Terapi</label>
+                    <select id="form-materi-terapi" class="w-full px-3 py-2 border rounded-lg"></select>
+                </div>
+                <div>
+                    <label class="block font-semibold text-slate-700 mb-1">Judul Nama Materi</label>
+                    <input type="text" id="form-materi-nama" class="w-full px-3 py-2 border rounded-lg" required>
+                </div>
+                <div>
+                    <label class="block font-semibold text-slate-700 mb-1">Fasilitator Pengampu</label>
+                    <select id="form-materi-fasilitator" class="w-full px-3 py-2 border rounded-lg"></select>
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block font-semibold text-slate-700 mb-1">Hari</label>
+                        <select id="form-materi-hari" class="w-full px-3 py-2 border rounded-lg">
+                            <option value="Senin">Senin</option>
+                            <option value="Selasa">Selasa</option>
+                            <option value="Rabu">Rabu</option>
+                            <option value="Kamis">Kamis</option>
+                            <option value="Jumat">Jumat</option>
+                            <option value="Sabtu">Sabtu</option>
+                            <option value="Minggu">Minggu</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block font-semibold text-slate-700 mb-1">Jam Kegiatan</label>
+                        <input type="text" id="form-materi-jam" value="08:00 - 09:30" class="w-full px-3 py-2 border rounded-lg">
+                    </div>
+                </div>
+                <div class="flex justify-end gap-2 pt-2">
+                    <button type="button" onclick="closeModalMateri()" class="px-4 py-2 bg-slate-100 rounded-lg">Batal</button>
+                    <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold">Simpan Data</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- LOGIKA JAVASCRIPT & FIREBASE TERPUSAT -->
+    <script>
+        let db, auth;
+        let appId = typeof __app_id !== 'undefined' ? __app_id : 'pp-sahabat-jogja-shared-db';
+
+        // State Aplikasi
+        let currentRole = 'ADMIN';
+        let stateSettings = {
+            namaLembaga: "PONDOK PEMULIHAN SAHABAT YOGYAKARTA",
+            alamat: "Jl. Raya Jogja - Solo KM. 11, Kalasan, Sleman, D.I. Yogyakarta",
+            pimpinan: "Bpk. Drs. H. Ahmad Wijaya, M.Si",
+            jabatan: "Pimpinan Lembaga"
+        };
+        let statePeserta = [];
+        let stateFasilitator = [];
+        let stateTerapi = [];
+        let stateMateri = [];
+        let stateAbsenPeserta = [];
+        let stateAbsenFasilitator = [];
+        let currentAbsenRecords = {};
+        let currentAbsenFasilitatorRecords = {};
+
+        // Custom Confirm Dialog State
+        let pendingConfirmAction = null;
+
+        function showConfirmDialog(title, message, onConfirm, isDanger = true) {
+            document.getElementById('confirm-modal-title').innerText = title;
+            document.getElementById('confirm-modal-message').innerText = message;
+            const btn = document.getElementById('confirm-modal-btn');
+            btn.className = `px-4 py-2 text-white rounded-xl text-xs font-semibold ${isDanger ? 'bg-rose-600 hover:bg-rose-700' : 'bg-blue-600 hover:bg-blue-700'}`;
+            
+            pendingConfirmAction = onConfirm;
+            btn.onclick = async () => {
+                closeConfirmModal();
+                if (pendingConfirmAction) {
+                    await pendingConfirmAction();
+                }
+            };
+            
+            document.getElementById('modal-confirm').classList.remove('hidden');
+            lucide.createIcons();
+        }
+
+        function closeConfirmModal() {
+            document.getElementById('modal-confirm').classList.add('hidden');
+            pendingConfirmAction = null;
+        }
+
+        window.addEventListener('firebase-loaded', async () => {
+            const { initializeApp, getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged, getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager } = window.firebaseModular;
+            
+            const firebaseConfig = typeof __firebase_config !== 'undefined' 
+                ? JSON.parse(__firebase_config) 
+                : { apiKey: "demo", authDomain: "demo", projectId: "demo" };
+
+            const app = initializeApp(firebaseConfig);
+            
+            // Konfigurasi Offline Persistence Firebase (IndexedDB)
+            try {
+                db = initializeFirestore(app, {
+                    localCache: persistentLocalCache({tabManager: persistentMultipleTabManager()})
+                });
+            } catch (e) {
+                console.warn("Firestore already initialized or cache failed, falling back to getFirestore", e);
+                db = getFirestore(app);
+            }
+            
+            auth = getAuth(app);
+
+            try {
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+            } catch (err) {
+                console.error("Auth error:", err);
+            }
+
+            onAuthStateChanged(auth, (user) => {
+                if (user) {
+                    updateNetworkStatusUI();
+                    initFirestoreListeners();
+                }
+            });
+        });
+
+        // Deteksi Online / Offline Status
+        window.addEventListener('online', updateNetworkStatusUI);
+        window.addEventListener('offline', updateNetworkStatusUI);
+
+        function updateNetworkStatusUI() {
+            const statusEl = document.getElementById('cloud-status');
+            if (!statusEl) return;
+            
+            if (navigator.onLine) {
+                statusEl.innerText = "● Terhubung Cloud (Online)";
+                statusEl.className = "text-[10px] text-emerald-600 font-semibold mt-1";
+                if (auth && auth.currentUser) {
+                    showToast("Kembali Online. Data telah disinkronisasikan ke Cloud.", true);
+                }
+            } else {
+                statusEl.innerText = "● Mode Offline (Tersimpan Lokal)";
+                statusEl.className = "text-[10px] text-amber-600 font-semibold mt-1";
+                showToast("Koneksi terputus. Data absen akan tersimpan otomatis secara lokal.", false);
+            }
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            lucide.createIcons();
+            const today = new Date().toISOString().slice(0, 10);
+            const thisMonth = new Date().toISOString().slice(0, 7);
+
+            document.getElementById('absen-tanggal').value = today;
+            document.getElementById('absen-fasilitator-tanggal').value = today;
+            document.getElementById('filter-rekap-harian-tanggal').value = today;
+            document.getElementById('filter-kegiatan-bulan').value = thisMonth;
+            document.getElementById('filter-mingguan-bulan').value = thisMonth;
+            document.getElementById('filter-bulanan-bulan').value = thisMonth;
+            document.getElementById('filter-fasilitator-bulan').value = thisMonth;
+            
+            document.querySelectorAll('.print-date-text').forEach(el => el.innerText = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }));
+        });
+
+        function initFirestoreListeners() {
+            const { collection, doc, onSnapshot } = window.firebaseModular;
+
+            // 1. LISTEN SETTINGS
+            onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'config'), (docSnap) => {
+                if (docSnap && docSnap.exists()) {
+                    stateSettings = docSnap.data();
+                    applySettings();
+                }
+            }, () => applySettings());
+
+            // 2. LISTEN DATA PESERTA REALTIME
+            onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'peserta'), (snapshot) => {
+                if (snapshot && !snapshot.empty) {
+                    statePeserta = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+                } else if (statePeserta.length === 0) {
+                    const defaults = [
+                        { idPeserta: 'P001', nama: 'Ahmad Fauzi', kelompok: 'Kelompok A', status: 'Aktif', ket: '-' },
+                        { idPeserta: 'P002', nama: 'Budi Santoso', kelompok: 'Kelompok A', status: 'Aktif', ket: '-' },
+                        { idPeserta: 'P003', nama: 'Chandra Wijaya', kelompok: 'Kelompok B', status: 'Aktif', ket: '-' },
+                        { idPeserta: 'P004', nama: 'Doni Setiawan', kelompok: 'Kelompok C', status: 'Aktif', ket: '-' }
+                    ];
+                    defaults.forEach((p, idx) => {
+                        window.firebaseModular.setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'peserta', 'p_' + (idx+1)), p);
+                    });
+                }
+                document.getElementById('badge-peserta').innerText = statePeserta.length;
+                document.getElementById('dash-total-peserta').innerText = statePeserta.length;
+                renderTablePeserta();
+                renderFormAbsenPeserta();
+            });
+
+            // 3. LISTEN DATA FASILITATOR REALTIME
+            onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'fasilitator'), (snapshot) => {
+                if (snapshot && !snapshot.empty) {
+                    stateFasilitator = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+                } else if (stateFasilitator.length === 0) {
+                    const defaults = [
+                        { idFasilitator: 'F001', nama: 'Dr. Hendro Pratama', terapi: 'Terapi Medis', status: 'Aktif', ket: 'Dokter Lembaga' },
+                        { idFasilitator: 'F002', nama: 'Ustadz Muhammad Ali', terapi: 'Terapi Spiritual', status: 'Aktif', ket: 'Pembimbing Kerohanian' }
+                    ];
+                    defaults.forEach((f, idx) => {
+                        window.firebaseModular.setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'fasilitator', 'f_' + (idx+1)), f);
+                    });
+                }
+                document.getElementById('badge-fasilitator').innerText = stateFasilitator.length;
+                document.getElementById('dash-total-fasilitator').innerText = stateFasilitator.length;
+                renderTableFasilitator();
+                populateDropdownFasilitator();
+                renderFormAbsenFasilitator();
+                renderRekapFasilitator();
+            });
+
+            // 4. LISTEN DATA TERAPI REALTIME
+            onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'terapi'), (snapshot) => {
+                if (snapshot && !snapshot.empty) {
+                    stateTerapi = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+                } else if (stateTerapi.length === 0) {
+                    const defaults = [
+                        { nama: 'Terapi Spiritual' },
+                        { nama: 'Terapi Medis' },
+                        { nama: 'Terapi Sosial' },
+                        { nama: 'Terapi Kognitif' },
+                        { nama: 'Terapi Seni' }
+                    ];
+                    defaults.forEach((t, idx) => {
+                        window.firebaseModular.setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'terapi', 't_' + (idx+1)), t);
+                    });
+                }
+                document.getElementById('dash-total-terapi').innerText = stateTerapi.length;
+                renderGridTerapi();
+                populateDropdownTerapi();
+                populateRekapHarianDropdownTerapi();
+                populateRekapKegiatanDropdownTerapi();
+                populateRekapBulananDropdownTerapi();
+            });
+
+            // 5. LISTEN DATA MATERI REALTIME
+            onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'materi'), (snapshot) => {
+                if (snapshot && !snapshot.empty) {
+                    stateMateri = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+                }
+                document.getElementById('dash-total-materi').innerText = stateMateri.length;
+                renderTableMateri();
+                populateDropdownMateri();
+            });
+
+            // 6. LISTEN ABSEN PESERTA REALTIME
+            onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'absen_peserta'), (snapshot) => {
+                if (snapshot && !snapshot.empty) {
+                    stateAbsenPeserta = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+                } else {
+                    stateAbsenPeserta = [];
+                }
+                renderTablePeserta();
+                renderRekapKegiatan();
+                renderRekapMingguan();
+                renderRekapBulanan();
+                populateRekapHarianDropdownTerapi();
+                renderRekapHarian();
+            });
+
+            // 7. LISTEN ABSEN FASILITATOR REALTIME
+            onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'absen_fasilitator'), (snapshot) => {
+                if (snapshot && !snapshot.empty) {
+                    stateAbsenFasilitator = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+                } else {
+                    stateAbsenFasilitator = [];
+                }
+                renderFormAbsenFasilitator();
+                renderRekapFasilitator();
+            });
+        }
+
+        function showToast(msg, isSuccess = true) {
+            const toast = document.getElementById('toast');
+            document.getElementById('toast-message').innerText = msg;
+            toast.className = `fixed top-4 right-4 z-50 px-4 py-3 rounded-xl shadow-xl text-white font-medium text-sm flex items-center gap-2 transition-all duration-300 ${isSuccess ? 'bg-emerald-600' : 'bg-rose-600'}`;
+            toast.classList.remove('hidden');
+            setTimeout(() => toast.classList.add('hidden'), 3000);
+        }
+
+        function getKeaktifanPeserta(pesertaId) {
+            let total = 0, hadir = 0;
+            stateAbsenPeserta.forEach(log => {
+                if (log.records && log.records[pesertaId]) {
+                    total++;
+                    if (log.records[pesertaId].status === 'H') hadir++;
+                }
+            });
+            if (total === 0) return { label: 'Aktif', pct: 100, class: 'bg-emerald-100 text-emerald-800' };
+            const pct = Math.round((hadir / total) * 100);
+            if (pct >= 75) return { label: 'Aktif', pct, class: 'bg-emerald-100 text-emerald-800' };
+            if (pct >= 50) return { label: 'Kurang Aktif', pct, class: 'bg-amber-100 text-amber-800' };
+            return { label: 'Pasif / Pendampingan', pct, class: 'bg-rose-100 text-rose-800' };
+        }
+
+        function navigateTo(sectionId) {
+            document.querySelectorAll('main > section').forEach(s => s.classList.add('hidden'));
+            document.getElementById(`section-${sectionId}`).classList.remove('hidden');
+
+            document.querySelectorAll('.nav-btn').forEach(b => {
+                b.className = "nav-btn w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100";
+            });
+            const activeBtn = document.getElementById(`nav-${sectionId}`);
+            if (activeBtn) activeBtn.className = "nav-btn w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold bg-blue-600 text-white";
+
+            if (sectionId === 'ABSEN_PESERTA') {
+                renderFormAbsenPeserta();
+                populateDropdownTerapi();
+                populateDropdownFasilitator();
+                populateDropdownMateri();
+            }
+            if (sectionId === 'ABSEN_FASILITATOR') renderFormAbsenFasilitator();
+            if (sectionId === 'REKAP_HARIAN') {
+                populateRekapHarianDropdownTerapi();
+                renderRekapHarian();
+            }
+            if (sectionId === 'REKAP_KEGIATAN') {
+                populateRekapKegiatanDropdownTerapi();
+                renderRekapKegiatan();
+            }
+            if (sectionId === 'REKAP_MINGGUAN') renderRekapMingguan();
+            if (sectionId === 'REKAP_BULANAN') {
+                populateRekapBulananDropdownTerapi();
+                renderRekapBulanan();
+            }
+            if (sectionId === 'REKAP_FASILITATOR') {
+                renderRekapFasilitator();
+            }
+        }
+
+        function switchRole(role) {
+            currentRole = role;
+            const btnAdmin = document.getElementById('btn-role-admin');
+            const btnFas = document.getElementById('btn-role-fasilitator');
+            if (role === 'ADMIN') {
+                btnAdmin.className = "px-3 py-1.5 rounded-md font-medium bg-blue-600 text-white transition";
+                btnFas.className = "px-3 py-1.5 rounded-md font-medium text-slate-400 hover:text-white transition";
+                document.querySelectorAll('.admin-only').forEach(el => el.classList.remove('hidden'));
+            } else {
+                btnFas.className = "px-3 py-1.5 rounded-md font-medium bg-blue-600 text-white transition";
+                btnAdmin.className = "px-3 py-1.5 rounded-md font-medium text-slate-400 hover:text-white transition";
+                document.querySelectorAll('.admin-only').forEach(el => el.classList.add('hidden'));
+                navigateTo('ABSEN_PESERTA');
+            }
+        }
+
+        function applySettings() {
+            document.getElementById('header-nama-lembaga').innerText = stateSettings.namaLembaga;
+            document.getElementById('dash-nama-lembaga').innerText = stateSettings.namaLembaga;
+            document.getElementById('dash-alamat').innerText = stateSettings.alamat;
+            document.getElementById('print-nama-lembaga').innerText = stateSettings.namaLembaga;
+            document.getElementById('print-alamat').innerText = stateSettings.alamat;
+            document.getElementById('print-pimpinan').innerText = stateSettings.pimpinan;
+            document.getElementById('print-jabatan').innerText = stateSettings.jabatan;
+
+            document.querySelectorAll('.text-lembaga-print').forEach(el => el.innerText = stateSettings.namaLembaga);
+            document.querySelectorAll('.text-alamat-print').forEach(el => el.innerText = stateSettings.alamat);
+            document.querySelectorAll('.print-pimpinan-text').forEach(el => el.innerText = stateSettings.pimpinan);
+            document.querySelectorAll('.print-jabatan-text').forEach(el => el.innerText = stateSettings.jabatan);
+
+            document.getElementById('set-nama-lembaga').value = stateSettings.namaLembaga || '';
+            document.getElementById('set-alamat').value = stateSettings.alamat || '';
+            document.getElementById('set-pimpinan').value = stateSettings.pimpinan || '';
+            document.getElementById('set-jabatan').value = stateSettings.jabatan || '';
+        }
+
+        function simpanPengaturan(e) {
+            e.preventDefault();
+            const data = {
+                namaLembaga: document.getElementById('set-nama-lembaga').value,
+                alamat: document.getElementById('set-alamat').value,
+                pimpinan: document.getElementById('set-pimpinan').value,
+                jabatan: document.getElementById('set-jabatan').value
+            };
+            stateSettings = data;
+            applySettings();
+            window.firebaseModular.setDoc(window.firebaseModular.doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'config'), data)
+                .then(() => showToast("Pengaturan disimpan permanen!"));
+        }
+
+        function downloadPDF(elementId, filenamePrefix) {
+            const element = document.getElementById(elementId);
+            if (!element) return;
+
+            showToast("Mempersiapkan dokumen PDF...", true);
+
+            const opt = {
+                margin:       [0.5, 0.5, 0.5, 0.5],
+                filename:     `${filenamePrefix}_${new Date().toISOString().slice(0, 10)}.pdf`,
+                image:        { type: 'jpeg', quality: 0.98 },
+                html2canvas:  { scale: 2, useCORS: true },
+                jsPDF:        { unit: 'in', format: 'a4', orientation: 'portrait' }
+            };
+
+            html2pdf().set(opt).from(element).save().then(() => {
+                showToast("PDF Berhasil Di-download!", true);
+            }).catch(err => {
+                console.error("Error generating PDF:", err);
+                showToast("Gagal membuat PDF", false);
+            });
+        }
+
+        function exportCSV(type) {
+            let csvContent = "data:text/csv;charset=utf-8,";
+            let fileName = `Export_${type}_${new Date().toISOString().slice(0,10)}.csv`;
+
+            if (type === 'peserta') {
+                csvContent += "ID Peserta,Nama Lengkap,Kelompok Kelas,Status Keanggotaan,Persentase Keaktifan,Keterangan\n";
+                statePeserta.forEach(p => {
+                    const kf = getKeaktifanPeserta(p.id);
+                    csvContent += `"${p.idPeserta}","${p.nama}","${p.kelompok || 'Kelompok A'}","${p.status}","${kf.pct}%","${p.ket || '-'}"\n`;
+                });
+            } else if (type === 'fasilitator') {
+                csvContent += "ID Fasilitator,Nama Fasilitator,Spesialisasi Terapi,Status,Keterangan\n";
+                stateFasilitator.forEach(f => {
+                    csvContent += `"${f.idFasilitator}","${f.nama}","${f.terapi}","${f.status || 'Aktif'}","${f.ket || '-'}"\n`;
+                });
+            } else if (type === 'terapi') {
+                csvContent += "No,Nama Jenis Terapi\n";
+                stateTerapi.forEach((t, i) => {
+                    csvContent += `"${i+1}","${t.nama}"\n`;
+                });
+            } else if (type === 'materi') {
+                csvContent += "Jenis Terapi,Nama Materi,Fasilitator,Hari,Jam\n";
+                stateMateri.forEach(m => {
+                    csvContent += `"${m.terapi}","${m.nama}","${m.fasilitator}","${m.hari}","${m.jam}"\n`;
+                });
+            } else if (type === 'rekap_harian') {
+                const tgl = document.getElementById('filter-rekap-harian-tanggal').value;
+                const terapiFilter = document.getElementById('filter-rekap-harian-terapi')?.value || 'ALL';
+                const logs = stateAbsenPeserta.filter(a => a.tanggal === tgl && (terapiFilter === 'ALL' || a.terapi === terapiFilter));
+                csvContent += `REKAP HARIAN - ${tgl}\n`;
+                csvContent += "Terapi,Materi,Kelompok,Fasilitator,ID Peserta,Nama Peserta,Status Kehadiran,Keterangan\n";
+                logs.forEach(log => {
+                    statePeserta.forEach(p => {
+                        if (log.kelompok && log.kelompok !== 'ALL' && p.kelompok !== log.kelompok) return;
+                        const rec = log.records ? log.records[p.id] : null;
+                        const st = rec ? rec.status : '-';
+                        const ket = rec ? (rec.ket || '-') : '-';
+                        csvContent += `"${log.terapi}","${log.materi || '-'}","${log.kelompok || 'Semua'}","${log.fasilitator || '-'}","${p.idPeserta}","${p.nama}","${st}","${ket}"\n`;
+                    });
+                });
+            } else if (type === 'rekap_kegiatan') {
+                const monthVal = document.getElementById('filter-kegiatan-bulan')?.value || new Date().toISOString().slice(0, 7);
+                const terapiFilter = document.getElementById('filter-kegiatan-terapi')?.value || 'ALL';
+                const logs = stateAbsenPeserta.filter(a => a.tanggal && a.tanggal.startsWith(monthVal) && (terapiFilter === 'ALL' || a.terapi === terapiFilter));
+                
+                let summaryMap = {};
+                logs.forEach(log => {
+                    const key = `${log.terapi}___${log.materi || 'Umum'}`;
+                    if (!summaryMap[key]) {
+                        summaryMap[key] = { terapi: log.terapi, materi: log.materi || 'Umum', count: 0, hadir: 0, nonHadir: 0 };
+                    }
+                    summaryMap[key].count++;
+                    if (log.records) {
+                        Object.values(log.records).forEach(rec => {
+                            if (rec.status === 'H') summaryMap[key].hadir++;
+                            else summaryMap[key].nonHadir++;
+                        });
+                    }
+                });
+
+                csvContent += `REKAP PER KEGIATAN / MATERI - Bulan ${monthVal}\n`;
+                csvContent += "Jenis Terapi,Materi / Topik,Total Sesi,Total Hadir (H),Total Non-Hadir (I/S/A),Rata-rata Hadir per Sesi\n";
+                Object.values(summaryMap).forEach(item => {
+                    const avg = item.count > 0 ? (item.hadir / item.count).toFixed(1) : 0;
+                    csvContent += `"${item.terapi}","${item.materi}","${item.count}","${item.hadir}","${item.nonHadir}","${avg}"\n`;
+                });
+            } else if (type === 'rekap_mingguan') {
+                const weekVal = parseInt(document.getElementById('filter-mingguan-minggu')?.value || '1');
+                const monthVal = document.getElementById('filter-mingguan-bulan')?.value || new Date().toISOString().slice(0, 7);
+                const ranges = [[1, 7], [8, 14], [15, 21], [22, 28], [29, 31]];
+                const range = ranges[weekVal - 1] || [1, 7];
+                const logs = stateAbsenPeserta.filter(a => a.tanggal && a.tanggal.startsWith(monthVal) && parseInt(a.tanggal.split('-')[2]) >= range[0] && parseInt(a.tanggal.split('-')[2]) <= range[1]);
+
+                csvContent += `REKAP MINGGUAN - Minggu Ke-${weekVal} (${monthVal})\n`;
+                csvContent += "ID Peserta,Nama Peserta,Kelompok Kelas,Hadir,Izin,Sakit,Alpa,Persentase,Status Keaktifan\n";
+                statePeserta.forEach(p => {
+                    let h = 0, iz = 0, s = 0, a = 0, total = 0;
+                    logs.forEach(log => {
+                        if (log.kelompok && log.kelompok !== 'ALL' && p.kelompok !== log.kelompok) return;
+                        if (log.records && log.records[p.id]) {
+                            total++;
+                            const st = log.records[p.id].status;
+                            if (st === 'H') h++;
+                            else if (st === 'I') iz++;
+                            else if (st === 'S') s++;
+                            else if (st === 'A') a++;
+                        }
+                    });
+                    const pct = total > 0 ? Math.round((h / total) * 100) : 100;
+                    let activeLabel = pct >= 75 ? 'Aktif' : (pct >= 50 ? 'Kurang Aktif' : 'Pasif');
+                    csvContent += `"${p.idPeserta}","${p.nama}","${p.kelompok || 'Kelompok A'}","${h}","${iz}","${s}","${a}","${pct}%","${activeLabel}"\n`;
+                });
+            } else if (type === 'rekap_bulanan') {
+                const monthVal = document.getElementById('filter-bulanan-bulan')?.value || new Date().toISOString().slice(0, 7);
+                const terapiFilter = document.getElementById('filter-bulanan-terapi')?.value || 'ALL';
+                const logs = stateAbsenPeserta.filter(a => a.tanggal && a.tanggal.startsWith(monthVal) && (terapiFilter === 'ALL' || a.terapi === terapiFilter));
+
+                csvContent += `REKAP BULANAN - Bulan ${monthVal} (Terapi: ${terapiFilter})\n`;
+                csvContent += "ID Peserta,Nama Peserta,Kelompok Kelas,Jumlah Sesi,Hadir,Izin,Sakit,Alpa,Persentase,Status Keaktifan\n";
+                statePeserta.forEach(p => {
+                    let h = 0, iz = 0, s = 0, a = 0, total = 0;
+                    logs.forEach(log => {
+                        if (log.kelompok && log.kelompok !== 'ALL' && p.kelompok !== log.kelompok) return;
+                        if (log.records && log.records[p.id]) {
+                            total++;
+                            const st = log.records[p.id].status;
+                            if (st === 'H') h++;
+                            else if (st === 'I') iz++;
+                            else if (st === 'S') s++;
+                            else if (st === 'A') a++;
+                        }
+                    });
+                    const pct = total > 0 ? Math.round((h / total) * 100) : 100;
+                    let activeLabel = pct >= 75 ? 'Aktif' : (pct >= 50 ? 'Kurang Aktif' : 'Pasif');
+                    csvContent += `"${p.idPeserta}","${p.nama}","${p.kelompok || 'Kelompok A'}","${total}","${h}","${iz}","${s}","${a}","${pct}%","${activeLabel}"\n`;
+                });
+            } else if (type === 'rekap_fasilitator') {
+                const monthVal = document.getElementById('filter-fasilitator-bulan')?.value || new Date().toISOString().slice(0, 7);
+                const logs = stateAbsenFasilitator.filter(a => a.tanggal && a.tanggal.startsWith(monthVal));
+
+                csvContent += `REKAP FASILITATOR - Bulan ${monthVal}\n`;
+                csvContent += "ID Fasilitator,Nama Fasilitator,Spesialisasi,Jml Hari Jadwal,Hadir,Izin,Alpa,Persentase Kehadiran\n";
+                stateFasilitator.forEach(f => {
+                    let h = 0, iz = 0, a = 0, total = 0;
+                    logs.forEach(log => {
+                        if (log.records && log.records[f.id]) {
+                            total++;
+                            const st = log.records[f.id].status;
+                            if (st === 'H') h++;
+                            else if (st === 'I') iz++;
+                            else if (st === 'A') a++;
+                        }
+                    });
+                    const pct = total > 0 ? Math.round((h / total) * 100) : 100;
+                    csvContent += `"${f.idFasilitator}","${f.nama}","${f.terapi || '-'}","${total}","${h}","${iz}","${a}","${pct}%"\n`;
+                });
+            }
+
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", fileName);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            showToast(`Data ${type} berhasil diekspor ke CSV!`);
+        }
+
+        function renderTablePeserta() {
+            const tbody = document.getElementById('tbody-peserta');
+            if (!tbody) return;
+            const searchElem = document.getElementById('search-peserta');
+            const search = searchElem ? searchElem.value.toLowerCase() : '';
+            const filterKelElem = document.getElementById('filter-peserta-kelompok');
+            const filterKel = filterKelElem ? filterKelElem.value : 'ALL';
+            const filterStElem = document.getElementById('filter-peserta-status');
+            const filterSt = filterStElem ? filterStElem.value : 'ALL';
+
+            const filtered = statePeserta.filter(p => {
+                const matchSearch = (p.nama || '').toLowerCase().includes(search) || (p.idPeserta || '').toLowerCase().includes(search);
+                const matchKel = filterKel === 'ALL' || (p.kelompok || 'Kelompok A') === filterKel;
+                const matchSt = filterSt === 'ALL' || p.status === filterSt;
+                return matchSearch && matchKel && matchSt;
+            });
+
+            tbody.innerHTML = filtered.map((p, i) => {
+                const kf = getKeaktifanPeserta(p.id);
+                return `
+                    <tr class="hover:bg-slate-50">
+                        <td class="p-3 text-center text-slate-500">${i + 1}</td>
+                        <td class="p-3 font-bold text-blue-600">${p.idPeserta}</td>
+                        <td class="p-3 font-semibold text-slate-800">${p.nama}</td>
+                        <td class="p-3 font-medium text-indigo-700">${p.kelompok || 'Kelompok A'}</td>
+                        <td class="p-3"><span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${p.status === 'Aktif' ? 'bg-blue-100 text-blue-800' : 'bg-slate-100'}">${p.status}</span></td>
+                        <td class="p-3 text-center"><span class="px-2.5 py-1 rounded-full text-[10px] font-bold ${kf.class}">${kf.label} (${kf.pct}%)</span></td>
+                        <td class="p-3 text-slate-500">${p.ket || '-'}</td>
+                        <td class="p-3 text-center">
+                            <div class="flex items-center justify-center gap-1">
+                                <button onclick="editPeserta('${p.id}')" class="p-1 text-blue-600 hover:bg-blue-50 rounded" title="Edit"><i data-lucide="edit" class="w-4 h-4"></i></button>
+                                <button onclick="deletePeserta('${p.id}')" class="p-1 text-rose-600 hover:bg-rose-50 rounded" title="Hapus"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+            lucide.createIcons();
+        }
+
+        function openModalPeserta(item = null) {
+            document.getElementById('title-modal-peserta').innerText = item ? "Edit Data Peserta" : "Tambah Peserta Baru";
+            document.getElementById('form-peserta-docid').value = item ? item.id : '';
+            document.getElementById('form-peserta-idpeserta').value = item ? item.idPeserta : `P${String(statePeserta.length + 1).padStart(3, '0')}`;
+            document.getElementById('form-peserta-nama').value = item ? item.nama : '';
+            document.getElementById('form-peserta-kelompok').value = item ? (item.kelompok || 'Kelompok A') : 'Kelompok A';
+            document.getElementById('form-peserta-status').value = item ? item.status : 'Aktif';
+            document.getElementById('form-peserta-ket').value = item ? (item.ket || '') : '';
+            document.getElementById('modal-peserta').classList.remove('hidden');
+        }
+
+        function closeModalPeserta() {
+            document.getElementById('modal-peserta').classList.add('hidden');
+        }
+
+        function editPeserta(id) {
+            const item = statePeserta.find(p => p.id === id);
+            if (item) openModalPeserta(item);
+        }
+
+        function simpanPeserta(e) {
+            e.preventDefault();
+            const docId = document.getElementById('form-peserta-docid').value || ('p_' + Date.now());
+            const data = {
+                idPeserta: document.getElementById('form-peserta-idpeserta').value,
+                nama: document.getElementById('form-peserta-nama').value,
+                kelompok: document.getElementById('form-peserta-kelompok').value,
+                status: document.getElementById('form-peserta-status').value,
+                ket: document.getElementById('form-peserta-ket').value
+            };
+
+            closeModalPeserta();
+
+            window.firebaseModular.setDoc(window.firebaseModular.doc(db, 'artifacts', appId, 'public', 'data', 'peserta', docId), data, { merge: true })
+                .then(() => showToast("Data peserta berhasil disimpan permanen di Cloud!"));
+        }
+
+        function deletePeserta(id) {
+            showConfirmDialog(
+                "Hapus Data Peserta",
+                "Apakah Anda yakin ingin menghapus data peserta ini?",
+                () => {
+                    const { doc, deleteDoc } = window.firebaseModular;
+                    deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'peserta', id))
+                        .then(() => showToast("Data peserta berhasil dihapus."))
+                        .catch(err => {
+                            console.error("Error deleting peserta:", err);
+                            showToast("Gagal menghapus data peserta.", false);
+                        });
+                }
+            );
+        }
+
+        function renderTableFasilitator() {
+            const tbody = document.getElementById('tbody-fasilitator');
+            if (!tbody) return;
+            const searchElem = document.getElementById('search-fasilitator');
+            const search = searchElem ? searchElem.value.toLowerCase() : '';
+            const filterTerapiElem = document.getElementById('filter-fasilitator-terapi');
+            const filterTerapi = filterTerapiElem ? filterTerapiElem.value : 'ALL';
+
+            const filtered = stateFasilitator.filter(f => {
+                const matchSearch = (f.nama || '').toLowerCase().includes(search) || (f.idFasilitator || '').toLowerCase().includes(search);
+                const matchTerapi = filterTerapi === 'ALL' || f.terapi === filterTerapi;
+                return matchSearch && matchTerapi;
+            });
+
+            tbody.innerHTML = filtered.map((f, i) => `
+                <tr class="hover:bg-slate-50">
+                    <td class="p-3 text-center text-slate-500">${i + 1}</td>
+                    <td class="p-3 font-bold text-blue-600">${f.idFasilitator}</td>
+                    <td class="p-3 font-semibold text-slate-800">${f.nama}</td>
+                    <td class="p-3 font-medium text-indigo-700">${f.terapi}</td>
+                    <td class="p-3"><span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">${f.status || 'Aktif'}</span></td>
+                    <td class="p-3 text-slate-500">${f.ket || '-'}</td>
+                    <td class="p-3 text-center">
+                        <div class="flex items-center justify-center gap-1">
+                            <button onclick="editFasilitator('${f.id}')" class="p-1 text-blue-600 hover:bg-blue-50 rounded" title="Edit"><i data-lucide="edit" class="w-4 h-4"></i></button>
+                            <button onclick="deleteFasilitator('${f.id}')" class="p-1 text-rose-600 hover:bg-rose-50 rounded" title="Hapus"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                        </div>
+                    </td>
+                </tr>
+            `).join('');
+            lucide.createIcons();
+        }
+
+        function openModalFasilitator(item = null) {
+            document.getElementById('title-modal-fasilitator').innerText = item ? "Edit Data Fasilitator" : "Tambah Fasilitator";
+            document.getElementById('form-fasilitator-docid').value = item ? item.id : '';
+            document.getElementById('form-fasilitator-id').value = item ? item.idFasilitator : `F${String(stateFasilitator.length + 1).padStart(3, '0')}`;
+            document.getElementById('form-fasilitator-nama').value = item ? item.nama : '';
+            
+            const sel = document.getElementById('form-fasilitator-terapi');
+            sel.innerHTML = stateTerapi.map(t => `<option value="${t.nama}" ${item && item.terapi === t.nama ? 'selected' : ''}>${t.nama}</option>`).join('');
+
+            document.getElementById('form-fasilitator-ket').value = item ? (item.ket || '') : '';
+            document.getElementById('modal-fasilitator').classList.remove('hidden');
+        }
+
+        function closeModalFasilitator() {
+            document.getElementById('modal-fasilitator').classList.add('hidden');
+        }
+
+        function editFasilitator(id) {
+            const item = stateFasilitator.find(f => f.id === id);
+            if (item) openModalFasilitator(item);
+        }
+
+        function simpanFasilitator(e) {
+            e.preventDefault();
+            const docId = document.getElementById('form-fasilitator-docid').value || ('f_' + Date.now());
+            const data = {
+                idFasilitator: document.getElementById('form-fasilitator-id').value,
+                nama: document.getElementById('form-fasilitator-nama').value,
+                terapi: document.getElementById('form-fasilitator-terapi').value,
+                status: 'Aktif',
+                ket: document.getElementById('form-fasilitator-ket').value
+            };
+            closeModalFasilitator();
+            window.firebaseModular.setDoc(window.firebaseModular.doc(db, 'artifacts', appId, 'public', 'data', 'fasilitator', docId), data, { merge: true })
+                .then(() => showToast("Data fasilitator berhasil disimpan!"));
+        }
+
+        function deleteFasilitator(id) {
+            showConfirmDialog(
+                "Hapus Fasilitator",
+                "Yakin ingin menghapus fasilitator ini?",
+                () => {
+                    const { doc, deleteDoc } = window.firebaseModular;
+                    deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'fasilitator', id))
+                        .then(() => showToast("Fasilitator dihapus."));
+                }
+            );
+        }
+
+        function renderGridTerapi() {
+            const grid = document.getElementById('grid-terapi');
+            if (!grid) return;
+            grid.innerHTML = stateTerapi.map((t, i) => `
+                <div class="bg-slate-50 p-4 rounded-xl border border-slate-200 flex justify-between items-center">
+                    <div class="flex items-center gap-3">
+                        <div class="w-8 h-8 rounded-lg bg-blue-100 text-blue-700 font-bold flex items-center justify-center text-xs">${i+1}</div>
+                        <span class="font-bold text-slate-800 text-sm">${t.nama}</span>
+                    </div>
+                    <div class="flex gap-1">
+                        <button onclick="openModalTerapi('${t.id}', '${t.nama}')" class="p-1.5 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100" title="Edit"><i data-lucide="edit" class="w-4 h-4"></i></button>
+                        <button onclick="deleteTerapi('${t.id}')" class="p-1.5 bg-rose-50 text-rose-600 rounded-lg hover:bg-rose-100" title="Hapus"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                    </div>
+                </div>
+            `).join('');
+            lucide.createIcons();
+        }
+
+        function simpanTerapi(e) {
+            e.preventDefault();
+            const nama = document.getElementById('input-nama-terapi').value.trim();
+            if (!nama) return;
+            const docId = 't_' + Date.now();
+            window.firebaseModular.setDoc(window.firebaseModular.doc(db, 'artifacts', appId, 'public', 'data', 'terapi', docId), { nama })
+                .then(() => {
+                    document.getElementById('input-nama-terapi').value = '';
+                    showToast("Jenis terapi ditambahkan!");
+                });
+        }
+
+        function openModalTerapi(id, nama) {
+            document.getElementById('form-terapi-docid').value = id;
+            document.getElementById('form-terapi-nama').value = nama;
+            document.getElementById('modal-terapi').classList.remove('hidden');
+        }
+
+        function closeModalTerapi() {
+            document.getElementById('modal-terapi').classList.add('hidden');
+        }
+
+        function simpanTerapiModal(e) {
+            e.preventDefault();
+            const docId = document.getElementById('form-terapi-docid').value;
+            const nama = document.getElementById('form-terapi-nama').value.trim();
+            if (!docId || !nama) return;
+            closeModalTerapi();
+            window.firebaseModular.setDoc(window.firebaseModular.doc(db, 'artifacts', appId, 'public', 'data', 'terapi', docId), { nama }, { merge: true })
+                .then(() => showToast("Jenis terapi diperbarui!"));
+        }
+
+        function deleteTerapi(id) {
+            showConfirmDialog(
+                "Hapus Terapi",
+                "Yakin ingin menghapus jenis terapi ini?",
+                () => {
+                    window.firebaseModular.deleteDoc(window.firebaseModular.doc(db, 'artifacts', appId, 'public', 'data', 'terapi', id))
+                        .then(() => showToast("Terapi dihapus."));
+                }
+            );
+        }
+
+        function renderTableMateri() {
+            const tbody = document.getElementById('tbody-materi');
+            if (!tbody) return;
+            tbody.innerHTML = stateMateri.map((m, i) => `
+                <tr class="hover:bg-slate-50">
+                    <td class="p-3 text-center text-slate-500">${i + 1}</td>
+                    <td class="p-3 font-semibold text-blue-700">${m.terapi}</td>
+                    <td class="p-3 font-bold text-slate-800">${m.nama}</td>
+                    <td class="p-3 text-slate-600">${m.fasilitator}</td>
+                    <td class="p-3 text-slate-500">${m.hari || '-'}, ${m.jam || '-'}</td>
+                    <td class="p-3 text-center">
+                        <div class="flex items-center justify-center gap-1">
+                            <button onclick="editMateri('${m.id}')" class="p-1 text-blue-600 hover:bg-blue-50 rounded" title="Edit"><i data-lucide="edit" class="w-4 h-4"></i></button>
+                            <button onclick="deleteMateri('${m.id}')" class="p-1 text-rose-600 hover:bg-rose-50 rounded" title="Hapus"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                        </div>
+                    </td>
+                </tr>
+            `).join('');
+            lucide.createIcons();
+        }
+
+        function openModalMateri(item = null) {
+            document.getElementById('title-modal-materi').innerText = item ? "Edit Materi Terapi" : "Tambah Materi Terapi";
+            document.getElementById('form-materi-docid').value = item ? item.id : '';
+            
+            const selTerapi = document.getElementById('form-materi-terapi');
+            selTerapi.innerHTML = stateTerapi.map(t => `<option value="${t.nama}" ${item && item.terapi === t.nama ? 'selected' : ''}>${t.nama}</option>`).join('');
+
+            const selFas = document.getElementById('form-materi-fasilitator');
+            selFas.innerHTML = stateFasilitator.map(f => `<option value="${f.nama}" ${item && item.fasilitator === f.nama ? 'selected' : ''}>${f.nama}</option>`).join('');
+
+            document.getElementById('form-materi-nama').value = item ? item.nama : '';
+            document.getElementById('form-materi-hari').value = item ? (item.hari || 'Senin') : 'Senin';
+            document.getElementById('form-materi-jam').value = item ? (item.jam || '08:00 - 09:30') : '08:00 - 09:30';
+
+            document.getElementById('modal-materi').classList.remove('hidden');
+        }
+
+        function closeModalMateri() {
+            document.getElementById('modal-materi').classList.add('hidden');
+        }
+
+        function editMateri(id) {
+            const item = stateMateri.find(m => m.id === id);
+            if (item) openModalMateri(item);
+        }
+
+        function simpanMateri(e) {
+            e.preventDefault();
+            const docId = document.getElementById('form-materi-docid').value || ('m_' + Date.now());
+            const data = {
+                terapi: document.getElementById('form-materi-terapi').value,
+                nama: document.getElementById('form-materi-nama').value,
+                fasilitator: document.getElementById('form-materi-fasilitator').value,
+                hari: document.getElementById('form-materi-hari').value,
+                jam: document.getElementById('form-materi-jam').value
+            };
+            closeModalMateri();
+            window.firebaseModular.setDoc(window.firebaseModular.doc(db, 'artifacts', appId, 'public', 'data', 'materi', docId), data, { merge: true })
+                .then(() => showToast("Materi terapi disimpan!"));
+        }
+
+        function deleteMateri(id) {
+            showConfirmDialog(
+                "Hapus Materi",
+                "Yakin ingin menghapus materi ini?",
+                () => {
+                    window.firebaseModular.deleteDoc(window.firebaseModular.doc(db, 'artifacts', appId, 'public', 'data', 'materi', id))
+                        .then(() => showToast("Materi dihapus."));
+                }
+            );
+        }
+
+        function populateDropdownTerapi() {
+            const selAbsen = document.getElementById('absen-jenis-terapi');
+            const selFasFilter = document.getElementById('filter-fasilitator-terapi');
+            
+            if (selAbsen) {
+                const currentVal = selAbsen.value;
+                selAbsen.innerHTML = stateTerapi.map(t => `<option value="${t.nama}">${t.nama}</option>`).join('');
+                if (currentVal && Array.from(selAbsen.options).some(o => o.value === currentVal)) {
+                    selAbsen.value = currentVal;
+                }
+            }
+            if (selFasFilter) {
+                const cur = selFasFilter.value;
+                selFasFilter.innerHTML = `<option value="ALL">Semua Jenis Terapi</option>` + stateTerapi.map(t => `<option value="${t.nama}">${t.nama}</option>`).join('');
+                if (cur && Array.from(selFasFilter.options).some(o => o.value === cur)) selFasFilter.value = cur;
+            }
+        }
+
+        function populateDropdownFasilitator() {
+            const sel = document.getElementById('absen-fasilitator');
+            if (sel) {
+                sel.innerHTML = stateFasilitator.map(f => `<option value="${f.nama}">${f.nama} (${f.terapi})</option>`).join('');
+            }
+        }
+
+        function populateDropdownMateri() {
+            const sel = document.getElementById('absen-materi-select');
+            const curTerapi = document.getElementById('absen-jenis-terapi')?.value;
+            if (sel) {
+                const filtered = stateMateri.filter(m => !curTerapi || m.terapi === curTerapi);
+                sel.innerHTML = `<option value="">-- Pilih dari Database Materi --</option>` + filtered.map(m => `<option value="${m.nama}">${m.nama}</option>`).join('');
+            }
+        }
+
+        function autoFillMateri() {
+            populateDropdownMateri();
+        }
+
+        function populateRekapHarianDropdownTerapi() {
+            const sel = document.getElementById('filter-rekap-harian-terapi');
+            if (!sel) return;
+            const currentVal = sel.value;
+            sel.innerHTML = `<option value="ALL">Semua Terapi Pada Tanggal Ini</option>` + stateTerapi.map(t => `<option value="${t.nama}">${t.nama}</option>`).join('');
+            if (currentVal && Array.from(sel.options).some(o => o.value === currentVal)) {
+                sel.value = currentVal;
+            }
+        }
+
+        function populateRekapKegiatanDropdownTerapi() {
+            const sel = document.getElementById('filter-kegiatan-terapi');
+            if (!sel) return;
+            const currentVal = sel.value;
+            sel.innerHTML = `<option value="ALL">Semua Jenis Terapi</option>` + stateTerapi.map(t => `<option value="${t.nama}">${t.nama}</option>`).join('');
+            if (currentVal && Array.from(sel.options).some(o => o.value === currentVal)) {
+                sel.value = currentVal;
+            }
+        }
+
+        function populateRekapBulananDropdownTerapi() {
+            const sel = document.getElementById('filter-bulanan-terapi');
+            if (!sel) return;
+            const currentVal = sel.value;
+            sel.innerHTML = `<option value="ALL">Semua Jenis Terapi</option>` + stateTerapi.map(t => `<option value="${t.nama}">${t.nama}</option>`).join('');
+            if (currentVal && Array.from(sel.options).some(o => o.value === currentVal)) {
+                sel.value = currentVal;
+            }
+        }
+
+        function renderFormAbsenPeserta() {
+            const tbody = document.getElementById('tbody-absen-peserta');
+            if (!tbody) return;
+
+            const selectedKelompok = document.getElementById('absen-kelompok').value;
+            const filteredPeserta = statePeserta.filter(p => p.status === 'Aktif' && (selectedKelompok === 'ALL' || (p.kelompok || 'Kelompok A') === selectedKelompok));
+
+            tbody.innerHTML = filteredPeserta.map((p, i) => {
+                const rec = currentAbsenRecords[p.id] || { status: 'H', ket: '' };
+                currentAbsenRecords[p.id] = rec;
+
+                return `
+                    <tr class="hover:bg-slate-50">
+                        <td class="p-3 text-center text-slate-500">${i + 1}</td>
+                        <td class="p-3 font-bold text-blue-600">${p.idPeserta}</td>
+                        <td class="p-3 font-semibold text-slate-800">${p.nama}</td>
+                        <td class="p-3 font-medium text-indigo-700">${p.kelompok || 'Kelompok A'}</td>
+                        <td class="p-3 text-center">
+                            <div class="flex items-center justify-center gap-2">
+                                <label class="flex items-center gap-1 cursor-pointer">
+                                    <input type="radio" name="st_${p.id}" value="H" ${rec.status === 'H' ? 'checked' : ''} onchange="updateAbsenRecord('${p.id}', 'status', 'H')" class="text-emerald-600 focus:ring-emerald-500">
+                                    <span class="font-bold text-emerald-700">H</span>
+                                </label>
+                                <label class="flex items-center gap-1 cursor-pointer">
+                                    <input type="radio" name="st_${p.id}" value="I" ${rec.status === 'I' ? 'checked' : ''} onchange="updateAbsenRecord('${p.id}', 'status', 'I')" class="text-blue-600 focus:ring-blue-500">
+                                    <span class="font-bold text-blue-700">I</span>
+                                </label>
+                                <label class="flex items-center gap-1 cursor-pointer">
+                                    <input type="radio" name="st_${p.id}" value="S" ${rec.status === 'S' ? 'checked' : ''} onchange="updateAbsenRecord('${p.id}', 'status', 'S')" class="text-amber-600 focus:ring-amber-500">
+                                    <span class="font-bold text-amber-700">S</span>
+                                </label>
+                                <label class="flex items-center gap-1 cursor-pointer">
+                                    <input type="radio" name="st_${p.id}" value="A" ${rec.status === 'A' ? 'checked' : ''} onchange="updateAbsenRecord('${p.id}', 'status', 'A')" class="text-rose-600 focus:ring-rose-500">
+                                    <span class="font-bold text-rose-700">A</span>
+                                </label>
+                            </div>
+                        </td>
+                        <td class="p-3">
+                            <input type="text" value="${rec.ket || ''}" onchange="updateAbsenRecord('${p.id}', 'ket', this.value)" placeholder="Keterangan..." class="w-full px-2 py-1 border rounded text-xs">
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+
+            updateStatsFormAbsen();
+        }
+
+        function updateAbsenRecord(pesertaId, field, val) {
+            if (!currentAbsenRecords[pesertaId]) currentAbsenRecords[pesertaId] = { status: 'H', ket: '' };
+            currentAbsenRecords[pesertaId][field] = val;
+            updateStatsFormAbsen();
+        }
+
+        function markAllStatus(status) {
+            Object.keys(currentAbsenRecords).forEach(pid => {
+                currentAbsenRecords[pid].status = status;
+            });
+            renderFormAbsenPeserta();
+        }
+
+        function updateStatsFormAbsen() {
+            let h = 0, iz = 0, s = 0, a = 0;
+            const keys = Object.keys(currentAbsenRecords);
+            keys.forEach(k => {
+                const st = currentAbsenRecords[k].status;
+                if (st === 'H') h++;
+                else if (st === 'I') iz++;
+                else if (st === 'S') s++;
+                else if (st === 'A') a++;
+            });
+            const total = keys.length;
+            const pct = total > 0 ? Math.round((h / total) * 100) : 0;
+
+            document.getElementById('stat-hadir').innerText = `Hadir: ${h}`;
+            document.getElementById('stat-izin').innerText = `Izin: ${iz}`;
+            document.getElementById('stat-sakit').innerText = `Sakit: ${s}`;
+            document.getElementById('stat-alpa').innerText = `Alpa: ${a}`;
+            document.getElementById('stat-persentase').innerText = `Persentase Kehadiran: ${pct}%`;
+        }
+
+        function loadExistingAbsenPeserta() {
+            const tgl = document.getElementById('absen-tanggal').value;
+            const terapi = document.getElementById('absen-jenis-terapi').value;
+            const log = stateAbsenPeserta.find(a => a.tanggal === tgl && a.terapi === terapi);
+            
+            const btnDelete = document.getElementById('btn-hapus-absen-peserta');
+
+            if (log) {
+                document.getElementById('absen-kelompok').value = log.kelompok || 'ALL';
+                document.getElementById('absen-fasilitator').value = log.fasilitator || '';
+                document.getElementById('absen-materi').value = log.materi || '';
+                document.getElementById('absen-materi-select').value = log.materi || '';
+                document.getElementById('absen-jam-mulai').value = log.jamMulai || '08:00';
+                document.getElementById('absen-jam-selesai').value = log.jamSelesai || '09:30';
+                document.getElementById('absen-catatan').value = log.catatan || '';
+                currentAbsenRecords = log.records || {};
+                if(btnDelete) btnDelete.classList.remove('hidden');
+            } else {
+                currentAbsenRecords = {};
+                if(btnDelete) btnDelete.classList.add('hidden');
+            }
+            renderFormAbsenPeserta();
+        }
+
+        function resetFormAbsenPeserta() {
+            currentAbsenRecords = {};
+            document.getElementById('absen-materi').value = '';
+            document.getElementById('absen-catatan').value = '';
+            renderFormAbsenPeserta();
+        }
+
+        function simpanAbsenPeserta() {
+            const tgl = document.getElementById('absen-tanggal').value;
+            const terapi = document.getElementById('absen-jenis-terapi').value;
+            if (!tgl || !terapi) {
+                showToast("Pilih Tanggal dan Jenis Terapi!", false);
+                return;
+            }
+
+            const docId = `ab_${tgl}_${terapi.replace(/\s+/g, '_')}`;
+            const data = {
+                tanggal: tgl,
+                terapi,
+                kelompok: document.getElementById('absen-kelompok').value,
+                fasilitator: document.getElementById('absen-fasilitator').value,
+                materi: document.getElementById('absen-materi').value,
+                jamMulai: document.getElementById('absen-jam-mulai').value,
+                jamSelesai: document.getElementById('absen-jam-selesai').value,
+                catatan: document.getElementById('absen-catatan').value,
+                records: currentAbsenRecords,
+                updatedAt: new Date().toISOString()
+            };
+
+            window.firebaseModular.setDoc(window.firebaseModular.doc(db, 'artifacts', appId, 'public', 'data', 'absen_peserta', docId), data, { merge: true })
+                .then(() => {
+                    showToast(navigator.onLine ? "Absensi Peserta Berhasil Disimpan di Cloud!" : "Absensi Disimpan Lokal. Akan disinkronisasi saat Online!");
+                    loadExistingAbsenPeserta(); // refresh the view to show the trash button
+                });
+        }
+        
+        function hapusAbsenPeserta() {
+            const tgl = document.getElementById('absen-tanggal').value;
+            const terapi = document.getElementById('absen-jenis-terapi').value;
+            if (!tgl || !terapi) return;
+            
+            showConfirmDialog(
+                "Hapus Rekap Absensi",
+                "Apakah Anda yakin ingin menghapus data absensi peserta untuk tanggal dan terapi ini?",
+                () => {
+                    const docId = `ab_${tgl}_${terapi.replace(/\s+/g, '_')}`;
+                    window.firebaseModular.deleteDoc(window.firebaseModular.doc(db, 'artifacts', appId, 'public', 'data', 'absen_peserta', docId))
+                        .then(() => {
+                            showToast("Absensi Peserta berhasil dihapus.");
+                            resetFormAbsenPeserta();
+                            document.getElementById('btn-hapus-absen-peserta').classList.add('hidden');
+                        })
+                        .catch(err => {
+                            console.error(err);
+                            showToast("Gagal menghapus absensi", false);
+                        });
+                }
+            );
+        }
+
+        function renderFormAbsenFasilitator() {
+            const tbody = document.getElementById('tbody-absen-fasilitator');
+            if (!tbody) return;
+            const tgl = document.getElementById('absen-fasilitator-tanggal').value;
+            const existingLog = stateAbsenFasilitator.find(f => f.tanggal === tgl);
+            const btnDelete = document.getElementById('btn-hapus-absen-fasilitator');
+
+            if (existingLog) {
+                currentAbsenFasilitatorRecords = existingLog.records || {};
+                if(btnDelete) btnDelete.classList.remove('hidden');
+            } else {
+                currentAbsenFasilitatorRecords = {};
+                if(btnDelete) btnDelete.classList.add('hidden');
+            }
+
+            tbody.innerHTML = stateFasilitator.map((f, i) => {
+                const rec = currentAbsenFasilitatorRecords[f.id] || { status: 'H', materi: '', ket: '' };
+                currentAbsenFasilitatorRecords[f.id] = rec;
+
+                return `
+                    <tr class="hover:bg-slate-50">
+                        <td class="p-3 text-center text-slate-500">${i + 1}</td>
+                        <td class="p-3 font-bold text-slate-800">${f.nama}</td>
+                        <td class="p-3 text-indigo-700 font-semibold">${f.terapi}</td>
+                        <td class="p-3">
+                            <input type="text" value="${rec.materi || ''}" onchange="currentAbsenFasilitatorRecords['${f.id}'].materi = this.value" placeholder="Materi yang dibawakan..." class="w-full px-2 py-1 border rounded text-xs">
+                        </td>
+                        <td class="p-3 text-center">
+                            <div class="flex items-center justify-center gap-2">
+                                <label class="flex items-center gap-1 cursor-pointer">
+                                    <input type="radio" name="st_fas_${f.id}" value="H" ${rec.status === 'H' ? 'checked' : ''} onchange="currentAbsenFasilitatorRecords['${f.id}'].status = 'H'" class="text-emerald-600">
+                                    <span class="font-bold text-emerald-700">Hadir</span>
+                                </label>
+                                <label class="flex items-center gap-1 cursor-pointer">
+                                    <input type="radio" name="st_fas_${f.id}" value="I" ${rec.status === 'I' ? 'checked' : ''} onchange="currentAbsenFasilitatorRecords['${f.id}'].status = 'I'" class="text-blue-600">
+                                    <span class="font-bold text-blue-700">Izin</span>
+                                </label>
+                                <label class="flex items-center gap-1 cursor-pointer">
+                                    <input type="radio" name="st_fas_${f.id}" value="A" ${rec.status === 'A' ? 'checked' : ''} onchange="currentAbsenFasilitatorRecords['${f.id}'].status = 'A'" class="text-rose-600">
+                                    <span class="font-bold text-rose-700">Alpa</span>
+                                </label>
+                            </div>
+                        </td>
+                        <td class="p-3">
+                            <input type="text" value="${rec.ket || ''}" onchange="currentAbsenFasilitatorRecords['${f.id}'].ket = this.value" placeholder="Keterangan..." class="w-full px-2 py-1 border rounded text-xs">
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function simpanAbsenFasilitator() {
+            const tgl = document.getElementById('absen-fasilitator-tanggal').value;
+            if (!tgl) {
+                showToast("Pilih Tanggal!", false);
+                return;
+            }
+            const docId = `abfas_${tgl}`;
+            const data = {
+                tanggal: tgl,
+                records: currentAbsenFasilitatorRecords,
+                updatedAt: new Date().toISOString()
+            };
+            window.firebaseModular.setDoc(window.firebaseModular.doc(db, 'artifacts', appId, 'public', 'data', 'absen_fasilitator', docId), data, { merge: true })
+                .then(() => {
+                    showToast(navigator.onLine ? "Absensi Fasilitator Berhasil Disimpan!" : "Absensi Disimpan Lokal. Akan disinkronisasi saat Online!");
+                    renderFormAbsenFasilitator();
+                });
+        }
+        
+        function hapusAbsenFasilitator() {
+            const tgl = document.getElementById('absen-fasilitator-tanggal').value;
+            if (!tgl) return;
+            
+            showConfirmDialog(
+                "Hapus Absensi Fasilitator",
+                "Apakah Anda yakin ingin menghapus rekap absensi fasilitator untuk tanggal ini?",
+                () => {
+                    const docId = `abfas_${tgl}`;
+                    window.firebaseModular.deleteDoc(window.firebaseModular.doc(db, 'artifacts', appId, 'public', 'data', 'absen_fasilitator', docId))
+                        .then(() => {
+                            showToast("Absensi Fasilitator berhasil dihapus.");
+                            currentAbsenFasilitatorRecords = {};
+                            renderFormAbsenFasilitator();
+                            document.getElementById('btn-hapus-absen-fasilitator').classList.add('hidden');
+                        });
+                }
+            );
+        }
+
+        function renderRekapHarian() {
+            const tgl = document.getElementById('filter-rekap-harian-tanggal').value;
+            const terapiFilter = document.getElementById('filter-rekap-harian-terapi')?.value || 'ALL';
+            
+            document.getElementById('rekap-tgl-text').innerText = tgl ? new Date(tgl).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) : '-';
+
+            const container = document.getElementById('rekap-harian-content');
+            if (!container) return;
+
+            const logs = stateAbsenPeserta.filter(a => a.tanggal === tgl && (terapiFilter === 'ALL' || a.terapi === terapiFilter));
+
+            if (logs.length === 0) {
+                container.innerHTML = `<p class="text-center italic text-slate-500 py-8">Belum ada data absensi untuk tanggal & filter terapi yang dipilih.</p>`;
+                return;
+            }
+
+            container.innerHTML = logs.map(log => {
+                const pesertaList = statePeserta.filter(p => p.status === 'Aktif' && (log.kelompok === 'ALL' || (p.kelompok || 'Kelompok A') === log.kelompok));
+                
+                return `
+                    <div class="border border-black p-3 rounded-md space-y-2">
+                        <div class="grid grid-cols-2 gap-2 text-xs border-b border-black pb-2">
+                            <div>
+                                <p><strong>Jenis Terapi:</strong> ${log.terapi}</p>
+                                <p><strong>Materi:</strong> ${log.materi || '-'}</p>
+                            </div>
+                            <div>
+                                <p><strong>Fasilitator:</strong> ${log.fasilitator || '-'}</p>
+                                <p><strong>Jam & Kelompok:</strong> ${log.jamMulai || '08:00'} - ${log.jamSelesai || '09:30'} (${log.kelompok || 'Semua'})</p>
+                            </div>
+                        </div>
+
+                        <table class="w-full text-xs border-collapse border border-black mt-2">
+                            <thead>
+                                <tr class="bg-slate-100 text-center font-bold">
+                                    <th class="border border-black p-1 w-8">No</th>
+                                    <th class="border border-black p-1 w-20">ID Peserta</th>
+                                    <th class="border border-black p-1 text-left">Nama Peserta</th>
+                                    <th class="border border-black p-1">Kelompok</th>
+                                    <th class="border border-black p-1 w-16">Status</th>
+                                    <th class="border border-black p-1">Keterangan</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${pesertaList.map((p, idx) => {
+                                    const rec = log.records ? log.records[p.id] : null;
+                                    const st = rec ? rec.status : '-';
+                                    const ket = rec ? (rec.ket || '-') : '-';
+                                    return `
+                                        <tr>
+                                            <td class="border border-black p-1 text-center">${idx + 1}</td>
+                                            <td class="border border-black p-1 text-center font-bold">${p.idPeserta}</td>
+                                            <td class="border border-black p-1">${p.nama}</td>
+                                            <td class="border border-black p-1 text-center">${p.kelompok || 'Kelompok A'}</td>
+                                            <td class="border border-black p-1 text-center font-bold">${st}</td>
+                                            <td class="border border-black p-1">${ket}</td>
+                                        </tr>
+                                    `;
+                                }).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function renderRekapKegiatan() {
+            const tbody = document.getElementById('tbody-rekap-kegiatan');
+            if (!tbody) return;
+
+            const monthVal = document.getElementById('filter-kegiatan-bulan')?.value || new Date().toISOString().slice(0, 7);
+            const terapiFilter = document.getElementById('filter-kegiatan-terapi')?.value || 'ALL';
+
+            document.getElementById('rekap-kegiatan-bulan-text').innerText = monthVal;
+
+            const logs = stateAbsenPeserta.filter(a => a.tanggal && a.tanggal.startsWith(monthVal) && (terapiFilter === 'ALL' || a.terapi === terapiFilter));
+
+            let summaryMap = {};
+            logs.forEach(log => {
+                const key = `${log.terapi}___${log.materi || 'Umum'}`;
+                if (!summaryMap[key]) {
+                    summaryMap[key] = { terapi: log.terapi, materi: log.materi || 'Umum', count: 0, hadir: 0, nonHadir: 0 };
+                }
+                summaryMap[key].count++;
+                if (log.records) {
+                    Object.values(log.records).forEach(rec => {
+                        if (rec.status === 'H') summaryMap[key].hadir++;
+                        else summaryMap[key].nonHadir++;
+                    });
+                }
+            });
+
+            const items = Object.values(summaryMap);
+            if (items.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="7" class="border border-black p-3 text-center italic">Tidak ada kegiatan terapi tercatat pada bulan ini.</td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = items.map((item, idx) => {
+                const avg = item.count > 0 ? (item.hadir / item.count).toFixed(1) : 0;
+                return `
+                    <tr>
+                        <td class="border border-black p-1.5 text-center">${idx + 1}</td>
+                        <td class="border border-black p-1.5 font-bold">${item.terapi}</td>
+                        <td class="border border-black p-1.5">${item.materi}</td>
+                        <td class="border border-black p-1.5 text-center font-semibold">${item.count} Sesi</td>
+                        <td class="border border-black p-1.5 text-center text-emerald-800 font-bold">${item.hadir}</td>
+                        <td class="border border-black p-1.5 text-center text-rose-800">${item.nonHadir}</td>
+                        <td class="border border-black p-1.5 text-center font-bold">${avg} Peserta / Sesi</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function renderRekapMingguan() {
+            const tbody = document.getElementById('tbody-rekap-mingguan');
+            if (!tbody) return;
+
+            const weekVal = parseInt(document.getElementById('filter-mingguan-minggu')?.value || '1');
+            const monthVal = document.getElementById('filter-mingguan-bulan')?.value || new Date().toISOString().slice(0, 7);
+
+            document.getElementById('rekap-mingguan-minggu-text').innerText = `Minggu Ke-${weekVal}`;
+            document.getElementById('rekap-mingguan-bulan-text').innerText = monthVal;
+
+            const ranges = [[1, 7], [8, 14], [15, 21], [22, 28], [29, 31]];
+            const range = ranges[weekVal - 1] || [1, 7];
+
+            const logs = stateAbsenPeserta.filter(a => {
+                if (!a.tanggal || !a.tanggal.startsWith(monthVal)) return false;
+                const d = parseInt(a.tanggal.split('-')[2]);
+                return d >= range[0] && d <= range[1];
+            });
+
+            tbody.innerHTML = statePeserta.map((p, idx) => {
+                let h = 0, iz = 0, s = 0, a = 0, total = 0;
+                logs.forEach(log => {
+                    if (log.kelompok && log.kelompok !== 'ALL' && p.kelompok !== log.kelompok) return;
+                    if (log.records && log.records[p.id]) {
+                        total++;
+                        const st = log.records[p.id].status;
+                        if (st === 'H') h++;
+                        else if (st === 'I') iz++;
+                        else if (st === 'S') s++;
+                        else if (st === 'A') a++;
+                    }
+                });
+
+                const pct = total > 0 ? Math.round((h / total) * 100) : 100;
+                
+                let activeBadge = '';
+                if (pct >= 75) {
+                    activeBadge = `<span class="inline-block px-2 py-0.5 bg-emerald-100 text-emerald-800 border border-emerald-300 rounded text-[10px] font-bold shadow-sm whitespace-nowrap">Aktif</span>`;
+                } else if (pct >= 50) {
+                    activeBadge = `<span class="inline-block px-2 py-0.5 bg-amber-100 text-amber-800 border border-amber-300 rounded text-[10px] font-bold shadow-sm whitespace-nowrap">Kurang</span>`;
+                } else {
+                    activeBadge = `<span class="inline-block px-2 py-0.5 bg-rose-100 text-rose-800 border border-rose-300 rounded text-[10px] font-bold shadow-sm whitespace-nowrap">Pasif</span>`;
+                }
+
+                return `
+                    <tr>
+                        <td class="border border-black p-1 text-center">${idx + 1}</td>
+                        <td class="border border-black p-1 font-bold">${p.nama}</td>
+                        <td class="border border-black p-1 text-center">${p.kelompok || 'Kelompok A'}</td>
+                        <td class="border border-black p-1 text-center text-emerald-800 font-bold">${h}</td>
+                        <td class="border border-black p-1 text-center text-blue-800">${iz}</td>
+                        <td class="border border-black p-1 text-center text-amber-800">${s}</td>
+                        <td class="border border-black p-1 text-center text-rose-800">${a}</td>
+                        <td class="border border-black p-1 text-center font-bold">${pct}%</td>
+                        <td class="border border-black p-1.5 text-center">${activeBadge}</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function renderRekapBulanan() {
+            const tbody = document.getElementById('tbody-rekap-bulanan');
+            if (!tbody) return;
+
+            const monthVal = document.getElementById('filter-bulanan-bulan')?.value || new Date().toISOString().slice(0, 7);
+            const terapiFilter = document.getElementById('filter-bulanan-terapi')?.value || 'ALL';
+
+            document.getElementById('rekap-bulanan-bulan-text').innerText = monthVal;
+            document.getElementById('rekap-bulanan-terapi-text').innerText = terapiFilter === 'ALL' ? 'Semua Jenis Terapi' : terapiFilter;
+
+            const logs = stateAbsenPeserta.filter(a => a.tanggal && a.tanggal.startsWith(monthVal) && (terapiFilter === 'ALL' || a.terapi === terapiFilter));
+
+            tbody.innerHTML = statePeserta.map((p, idx) => {
+                let h = 0, iz = 0, s = 0, a = 0, total = 0;
+                logs.forEach(log => {
+                    if (log.kelompok && log.kelompok !== 'ALL' && p.kelompok !== log.kelompok) return;
+                    if (log.records && log.records[p.id]) {
+                        total++;
+                        const st = log.records[p.id].status;
+                        if (st === 'H') h++;
+                        else if (st === 'I') iz++;
+                        else if (st === 'S') s++;
+                        else if (st === 'A') a++;
+                    }
+                });
+
+                const pct = total > 0 ? Math.round((h / total) * 100) : 100;
+                
+                let activeBadge = '';
+                if (pct >= 75) {
+                    activeBadge = `<span class="inline-block px-2 py-0.5 bg-emerald-100 text-emerald-800 border border-emerald-300 rounded text-[10px] font-bold shadow-sm whitespace-nowrap">Sangat Aktif</span>`;
+                } else if (pct >= 50) {
+                    activeBadge = `<span class="inline-block px-2 py-0.5 bg-amber-100 text-amber-800 border border-amber-300 rounded text-[10px] font-bold shadow-sm whitespace-nowrap">Cukup Aktif</span>`;
+                } else {
+                    activeBadge = `<span class="inline-block px-2 py-0.5 bg-rose-100 text-rose-800 border border-rose-300 rounded text-[10px] font-bold shadow-sm whitespace-nowrap">Pendampingan</span>`;
+                }
+
+                return `
+                    <tr>
+                        <td class="border border-black p-1 text-center">${idx + 1}</td>
+                        <td class="border border-black p-1 text-center font-bold">${p.idPeserta}</td>
+                        <td class="border border-black p-1 font-bold">${p.nama}</td>
+                        <td class="border border-black p-1 text-center">${p.kelompok || 'Kelompok A'}</td>
+                        <td class="border border-black p-1 text-center font-semibold">${total}</td>
+                        <td class="border border-black p-1 text-center text-emerald-800 font-bold">${h}</td>
+                        <td class="border border-black p-1 text-center text-blue-800">${iz}</td>
+                        <td class="border border-black p-1 text-center text-amber-800">${s}</td>
+                        <td class="border border-black p-1 text-center text-rose-800">${a}</td>
+                        <td class="border border-black p-1 text-center font-bold">${pct}%</td>
+                        <td class="border border-black p-1.5 text-center">${activeBadge}</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+        
+        function renderRekapFasilitator() {
+            const tbody = document.getElementById('tbody-rekap-fasilitator');
+            if (!tbody) return;
+
+            const monthVal = document.getElementById('filter-fasilitator-bulan')?.value || new Date().toISOString().slice(0, 7);
+            const monthTextEl = document.getElementById('rekap-fas-bulan-text');
+            if (monthTextEl) monthTextEl.innerText = monthVal;
+
+            const logs = stateAbsenFasilitator.filter(a => a.tanggal && a.tanggal.startsWith(monthVal));
+
+            tbody.innerHTML = stateFasilitator.map((f, idx) => {
+                let h = 0, iz = 0, a = 0, total = 0;
+                logs.forEach(log => {
+                    if (log.records && log.records[f.id]) {
+                        total++;
+                        const st = log.records[f.id].status;
+                        if (st === 'H') h++;
+                        else if (st === 'I') iz++;
+                        else if (st === 'A') a++;
+                    }
+                });
+
+                const pct = total > 0 ? Math.round((h / total) * 100) : (total === 0 ? '-' : 0);
+
+                return `
+                    <tr>
+                        <td class="border border-black p-1 text-center">${idx + 1}</td>
+                        <td class="border border-black p-1 text-center font-bold">${f.idFasilitator}</td>
+                        <td class="border border-black p-1 font-bold">${f.nama}</td>
+                        <td class="border border-black p-1 text-center">${f.terapi || '-'}</td>
+                        <td class="border border-black p-1 text-center font-semibold">${total}</td>
+                        <td class="border border-black p-1 text-center text-emerald-800 font-bold">${h}</td>
+                        <td class="border border-black p-1 text-center text-blue-800">${iz}</td>
+                        <td class="border border-black p-1 text-center text-rose-800">${a}</td>
+                        <td class="border border-black p-1 text-center font-bold">${pct}${pct !== '-' ? '%' : ''}</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function confirmResetAllAbsen() {
+            showConfirmDialog(
+                "Reset Total Absensi",
+                "PERINGATAN: Tindakan ini akan menghapus seluruh data rekap absensi peserta dan fasilitator di cloud database!",
+                async () => {
+                    const { doc, deleteDoc } = window.firebaseModular;
+                    const promises = [];
+                    stateAbsenPeserta.forEach(a => promises.push(deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'absen_peserta', a.id))));
+                    stateAbsenFasilitator.forEach(f => promises.push(deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'absen_fasilitator', f.id))));
+                    await Promise.all(promises);
+                    showToast("Seluruh histori absensi berhasil dibersihkan!");
+                }
+            );
+        }
+    </script>
+</body>
+</html>
+```
